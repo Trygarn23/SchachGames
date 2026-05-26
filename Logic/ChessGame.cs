@@ -79,15 +79,29 @@ public sealed class ChessGame
 
     public bool TryMove(BoardPosition from, BoardPosition to)
     {
+        return TryMove(from, to, out _);
+    }
+
+    public bool TryMove(BoardPosition from, BoardPosition to, out MoveResult? result)
+    {
+        result = null;
         IReadOnlyList<BoardPosition> legalMoves = GetLegalMoves(from);
         if (!legalMoves.Contains(to))
         {
             return false;
         }
 
-        board[to.Row, to.Column] = board[from.Row, from.Column];
+        ChessPiece? movedPiece = board[from.Row, from.Column];
+        if (movedPiece is null)
+        {
+            return false;
+        }
+
+        ChessPiece? capturedPiece = board[to.Row, to.Column];
+        board[to.Row, to.Column] = movedPiece;
         board[from.Row, from.Column] = null;
         CurrentTurn = CurrentTurn == PieceColor.White ? PieceColor.Black : PieceColor.White;
+        result = new MoveResult(from, to, movedPiece, capturedPiece);
         return true;
     }
 

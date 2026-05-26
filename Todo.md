@@ -9,13 +9,13 @@
 - [x] Ungueltige Zuege mit Statusmeldung abfangen.
 - [x] Button fuer neues Spiel einbauen.
 - [x] Statusanzeige fuer aktuellen Spieler anzeigen.
-- [ ] Letzten Zug in der UI anzeigen.
-- [ ] Geschlagene Figuren anzeigen.
-- [ ] Zugliste / Verlauf anzeigen.
-- [ ] Brett optional drehen.
-- [ ] Koordinaten am Brettrand anzeigen.
-- [ ] Fenster bei kleinen Groessen pruefen.
-- [ ] Tastaturbedienung planen und spaeter umsetzen.
+- [x] Letzten Zug in der UI anzeigen.
+- [x] Geschlagene Figuren anzeigen.
+- [x] Zugliste / Verlauf anzeigen.
+- [x] Brett optional drehen.
+- [x] Koordinaten am Brettrand anzeigen.
+- [x] Fenster bei kleinen Groessen pruefen.
+- [x] Tastaturbedienung planen und spaeter umsetzen.
 
 ---
 

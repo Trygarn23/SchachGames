@@ -4,28 +4,28 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="Schach" Height="760" Width="980" MinHeight="620" MinWidth="820"
-        Background="#202329">
-    <Grid Margin="24">
+        Title="Schach" Height="760" Width="1080" MinHeight="640" MinWidth="900"
+        Background="#202329"
+        KeyDown="Window_KeyDown">
+    <Grid Margin="20">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="280" />
+            <ColumnDefinition Width="*" MinWidth="520" />
+            <ColumnDefinition Width="320" />
         </Grid.ColumnDefinitions>
 
         <Border Grid.Column="0"
                 BorderBrush="#111318"
                 BorderThickness="2"
                 Background="#111318"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center">
-            <Grid x:Name="BoardHost"
-                  Width="640"
-                  Height="640" />
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch">
+            <Viewbox x:Name="BoardHost"
+                     Stretch="Uniform"
+                     Margin="12" />
         </Border>
 
-        <Grid Grid.Column="1" Margin="24,0,0,0">
+        <Grid Grid.Column="1" Margin="20,0,0,0">
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
@@ -42,56 +42,127 @@
                            Foreground="#AAB0BA" />
             </StackPanel>
 
-            <Border Grid.Row="1"
-                    Margin="0,28,0,0"
-                    Padding="14"
-                    Background="#2B3038"
-                    BorderBrush="#3A414C"
-                    BorderThickness="1"
-                    CornerRadius="6">
+            <ScrollViewer Grid.Row="1"
+                          Margin="0,24,0,0"
+                          VerticalScrollBarVisibility="Auto">
                 <StackPanel>
-                    <TextBlock Text="Status"
-                               FontSize="13"
-                               Foreground="#AAB0BA" />
-                    <TextBlock x:Name="StatusText"
-                               Margin="0,6,0,0"
-                               FontSize="18"
-                               FontWeight="SemiBold"
-                               Foreground="#F4F1E8"
-                               TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
+                    <Border Padding="14"
+                            Background="#2B3038"
+                            BorderBrush="#3A414C"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <StackPanel>
+                            <TextBlock Text="Status"
+                                       FontSize="13"
+                                       Foreground="#AAB0BA" />
+                            <TextBlock x:Name="StatusText"
+                                       Margin="0,6,0,0"
+                                       FontSize="18"
+                                       FontWeight="SemiBold"
+                                       Foreground="#F4F1E8"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
 
-            <Border Grid.Row="2"
-                    Margin="0,18,0,0"
-                    Padding="14"
-                    Background="#252A31"
-                    BorderBrush="#333A44"
-                    BorderThickness="1"
-                    CornerRadius="6">
-                <StackPanel>
-                    <TextBlock Text="Naechste Schritte"
-                               FontSize="15"
-                               FontWeight="SemiBold"
-                               Foreground="#F4F1E8" />
-                    <TextBlock Margin="0,10,0,0"
-                               Foreground="#C8CDD5"
-                               LineHeight="22"
-                               TextWrapping="Wrap"
-                               Text="Basiszuege sind vorbereitet. Schach, Matt, Rochade, En passant, Bauernumwandlung und Historie kommen danach sauber Schritt fuer Schritt dazu." />
-                </StackPanel>
-            </Border>
+                    <Border Margin="0,14,0,0"
+                            Padding="14"
+                            Background="#252A31"
+                            BorderBrush="#333A44"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <StackPanel>
+                            <TextBlock Text="Letzter Zug"
+                                       FontSize="13"
+                                       Foreground="#AAB0BA" />
+                            <TextBlock x:Name="LastMoveText"
+                                       Margin="0,6,0,0"
+                                       FontSize="16"
+                                       FontWeight="SemiBold"
+                                       Foreground="#F4F1E8"
+                                       Text="Noch kein Zug" />
+                        </StackPanel>
+                    </Border>
 
-            <Button Grid.Row="3"
-                    Margin="0,18,0,0"
-                    Height="44"
-                    Click="NewGameButton_Click"
-                    Content="Neues Spiel"
-                    FontSize="15"
-                    FontWeight="SemiBold"
-                    Background="#E8C16A"
-                    Foreground="#171A1F"
-                    BorderThickness="0" />
+                    <Border Margin="0,14,0,0"
+                            Padding="14"
+                            Background="#252A31"
+                            BorderBrush="#333A44"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <StackPanel>
+                            <TextBlock Text="Geschlagene Figuren"
+                                       FontSize="15"
+                                       FontWeight="SemiBold"
+                                       Foreground="#F4F1E8" />
+                            <TextBlock Text="Von Weiss"
+                                       Margin="0,12,0,0"
+                                       FontSize="12"
+                                       Foreground="#AAB0BA" />
+                            <TextBlock x:Name="CapturedByWhiteText"
+                                       Margin="0,4,0,0"
+                                       FontFamily="Segoe UI Symbol"
+                                       FontSize="25"
+                                       Foreground="#F4F1E8"
+                                       Text="-" />
+                            <TextBlock Text="Von Schwarz"
+                                       Margin="0,12,0,0"
+                                       FontSize="12"
+                                       Foreground="#AAB0BA" />
+                            <TextBlock x:Name="CapturedByBlackText"
+                                       Margin="0,4,0,0"
+                                       FontFamily="Segoe UI Symbol"
+                                       FontSize="25"
+                                       Foreground="#F4F1E8"
+                                       Text="-" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Margin="0,14,0,0"
+                            Padding="14"
+                            Background="#252A31"
+                            BorderBrush="#333A44"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <StackPanel>
+                            <TextBlock Text="Zugliste"
+                                       FontSize="15"
+                                       FontWeight="SemiBold"
+                                       Foreground="#F4F1E8" />
+                            <ListBox x:Name="MoveHistoryList"
+                                     Margin="0,10,0,0"
+                                     MinHeight="160"
+                                     MaxHeight="230"
+                                     Background="#1D2127"
+                                     BorderBrush="#333A44"
+                                     Foreground="#F4F1E8" />
+                        </StackPanel>
+                    </Border>
+
+                    <CheckBox x:Name="FlipBoardCheckBox"
+                              Margin="4,16,0,0"
+                              Checked="FlipBoardCheckBox_Changed"
+                              Unchecked="FlipBoardCheckBox_Changed"
+                              Content="Brett drehen"
+                              Foreground="#F4F1E8"
+                              FontSize="14" />
+                </StackPanel>
+            </ScrollViewer>
+
+            <StackPanel Grid.Row="2" Margin="0,16,0,0">
+                <Button Height="44"
+                        Click="NewGameButton_Click"
+                        Content="Neues Spiel"
+                        FontSize="15"
+                        FontWeight="SemiBold"
+                        Background="#E8C16A"
+                        Foreground="#171A1F"
+                        BorderThickness="0" />
+                <TextBlock Margin="0,10,0,0"
+                           Foreground="#AAB0BA"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           Text="Tastatur: N startet neu, F dreht das Brett, Esc hebt die Auswahl auf." />
+            </StackPanel>
         </Grid>
     </Grid>
 </Window>
