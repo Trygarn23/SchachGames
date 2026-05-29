@@ -7,6 +7,21 @@
         Title="Schach" Height="760" Width="1080" MinHeight="640" MinWidth="900"
         Background="#202329"
         KeyDown="Window_KeyDown">
+    <DockPanel>
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="_Datei">
+                <MenuItem Header="_Neu" Click="NewGameMenuItem_Click" />
+                <Separator />
+                <MenuItem Header="_Speichern..." Click="SaveGameMenuItem_Click" />
+                <MenuItem Header="_Laden..." Click="LoadGameMenuItem_Click" />
+                <Separator />
+                <MenuItem Header="PGN _exportieren..." Click="ExportPgnMenuItem_Click" />
+                <MenuItem Header="PGN _importieren..." Click="ImportPgnMenuItem_Click" />
+                <Separator />
+                <MenuItem Header="_Beenden" Click="ExitMenuItem_Click" />
+            </MenuItem>
+        </Menu>
+
     <Grid Margin="20">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" MinWidth="520" />
@@ -32,11 +47,13 @@
             </Grid.RowDefinitions>
 
             <StackPanel>
-                <TextBlock Text="Schach"
+                    <TextBlock Text="Version 1.0"
+                           Foreground="#AAB0BA" />
+                    <TextBlock Text="Schach"
                            FontSize="34"
                            FontWeight="SemiBold"
                            Foreground="#F4F1E8" />
-                <TextBlock Text="Grundgeruest"
+                <TextBlock Text="Startwege"
                            Margin="0,4,0,0"
                            FontSize="15"
                            Foreground="#AAB0BA" />
@@ -80,6 +97,46 @@
                                        FontWeight="SemiBold"
                                        Foreground="#F4F1E8"
                                        Text="Noch kein Zug" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Margin="0,14,0,0"
+                            Padding="14"
+                            Background="#252A31"
+                            BorderBrush="#333A44"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <StackPanel>
+                            <TextBlock Text="Schachuhr"
+                                       FontSize="15"
+                                       FontWeight="SemiBold"
+                                       Foreground="#F4F1E8" />
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="Weiss"
+                                               FontSize="12"
+                                               Foreground="#AAB0BA" />
+                                    <TextBlock x:Name="WhiteClockText"
+                                               FontSize="20"
+                                               FontWeight="SemiBold"
+                                               Foreground="#F4F1E8"
+                                               Text="10:00" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Schwarz"
+                                               FontSize="12"
+                                               Foreground="#AAB0BA" />
+                                    <TextBlock x:Name="BlackClockText"
+                                               FontSize="20"
+                                               FontWeight="SemiBold"
+                                               Foreground="#F4F1E8"
+                                               Text="10:00" />
+                                </StackPanel>
+                            </Grid>
                         </StackPanel>
                     </Border>
 
@@ -138,6 +195,57 @@
                         </StackPanel>
                     </Border>
 
+                    <Border Margin="0,14,0,0"
+                            Padding="14"
+                            Background="#252A31"
+                            BorderBrush="#333A44"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <StackPanel>
+                            <TextBlock Text="KI-Gegner"
+                                       FontSize="15"
+                                       FontWeight="SemiBold"
+                                       Foreground="#F4F1E8" />
+                            <ComboBox x:Name="AiDifficultyComboBox"
+                                      Margin="0,10,0,0"
+                                      Height="34"
+                                      SelectionChanged="AiDifficultyComboBox_SelectionChanged"
+                                      SelectedIndex="0">
+                                <ComboBoxItem Content="Aus" Tag="Off" />
+                                <ComboBoxItem Content="Leicht" Tag="Easy" />
+                                <ComboBoxItem Content="Mittel" Tag="Medium" />
+                                <ComboBoxItem Content="Schwer" Tag="Hard" />
+                            </ComboBox>
+                            <TextBlock Margin="0,8,0,0"
+                                       Foreground="#AAB0BA"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Text="Die KI spielt Schwarz." />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Margin="0,14,0,0"
+                            Padding="14"
+                            Background="#252A31"
+                            BorderBrush="#333A44"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <StackPanel>
+                            <TextBlock Text="Darstellung"
+                                       FontSize="15"
+                                       FontWeight="SemiBold"
+                                       Foreground="#F4F1E8" />
+                            <ComboBox x:Name="BoardThemeComboBox"
+                                      Margin="0,10,0,0"
+                                      Height="34"
+                                      SelectionChanged="BoardThemeComboBox_SelectionChanged"
+                                      SelectedIndex="0">
+                                <ComboBoxItem Content="Dunkel" Tag="Dark" />
+                                <ComboBoxItem Content="Hell" Tag="Light" />
+                            </ComboBox>
+                        </StackPanel>
+                    </Border>
+
                     <CheckBox x:Name="FlipBoardCheckBox"
                               Margin="4,16,0,0"
                               Checked="FlipBoardCheckBox_Changed"
@@ -165,4 +273,5 @@
             </StackPanel>
         </Grid>
     </Grid>
+    </DockPanel>
 </Window>

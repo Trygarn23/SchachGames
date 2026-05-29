@@ -1,13 +1,13 @@
 namespace Schach.Logic;
 
-public sealed record MoveResult(
-    int MoveNumber,
+public sealed record LegalMove(
     BoardPosition From,
     BoardPosition To,
     ChessPiece MovedPiece,
     ChessPiece? CapturedPiece,
-    MoveKind Kind,
-    PieceType? PromotionType)
+    MoveKind Kind = MoveKind.Normal,
+    PieceType? PromotionType = null,
+    BoardPosition? CapturedPosition = null)
 {
     public string Notation => Kind switch
     {

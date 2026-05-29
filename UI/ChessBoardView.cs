@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using Schach.Logic;
 using Schach.Visuals;
 
@@ -17,6 +18,7 @@ public sealed class ChessBoardView : Grid
     private readonly Button[,] squares = new Button[BoardSize, BoardSize];
     private readonly TextBlock[] rankLabels = new TextBlock[BoardSize];
     private readonly TextBlock[] fileLabels = new TextBlock[BoardSize];
+    private readonly Dictionary<BoardPosition, BoardMarkerColor> manualMarkers = [];
     private BoardPosition? selectedSquare;
     private IReadOnlyList<BoardPosition> selectedMoves = [];
 
@@ -44,8 +46,9 @@ public sealed class ChessBoardView : Grid
         game.Reset();
         selectedSquare = null;
         selectedMoves = [];
+        manualMarkers.Clear();
         Refresh();
-        StatusChanged?.Invoke("Neues Spiel gestartet");
+        StatusChanged?.Invoke(game.GetStatusText("Neues Spiel gestartet"));
     }
 
     public void SetFlipped(bool isFlipped)
@@ -54,12 +57,38 @@ public sealed class ChessBoardView : Grid
         Refresh();
     }
 
+    public void SetTheme(BoardThemeMode themeMode)
+    {
+        theme.Mode = themeMode;
+        Refresh();
+    }
+
+    public void ReloadFromGame(string message)
+    {
+        selectedSquare = null;
+        selectedMoves = [];
+        manualMarkers.Clear();
+        Refresh();
+        StatusChanged?.Invoke(game.GetStatusText(message));
+    }
+
+    public bool TryPlayMove(LegalMove move)
+    {
+        if (!game.TryMove(move.From, move.To, out MoveResult? result) || result is null)
+        {
+            return false;
+        }
+
+        CompleteMove(result);
+        return true;
+    }
+
     public void ClearSelection()
     {
         selectedSquare = null;
         selectedMoves = [];
         Refresh();
-        StatusChanged?.Invoke(GetTurnText());
+        StatusChanged?.Invoke(game.GetStatusText("Auswahl aufgehoben"));
     }
 
     private void BuildBoard()
@@ -129,12 +158,61 @@ public sealed class ChessBoardView : Grid
         };
 
         square.Click += Square_Click;
+        square.MouseRightButtonUp += Square_MouseRightButtonUp;
+        square.MouseEnter += (_, _) => square.Opacity = 0.92;
+        square.MouseLeave += (_, _) => square.Opacity = 1.0;
+        square.GotKeyboardFocus += (_, _) => Refresh();
+        square.LostKeyboardFocus += (_, _) => Refresh();
         return square;
+    }
+
+    private void Square_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        Focus();
+        e.Handled = true;
+
+        if (sender is not Button { Tag: BoardPosition position })
+        {
+            return;
+        }
+
+        CycleManualMarker(position);
+        Refresh();
+        StatusChanged?.Invoke(game.GetStatusText($"{position.ToAlgebraic()} markiert"));
+    }
+
+    private void CycleManualMarker(BoardPosition position)
+    {
+        if (!manualMarkers.TryGetValue(position, out BoardMarkerColor markerColor))
+        {
+            manualMarkers[position] = BoardMarkerColor.Yellow;
+            return;
+        }
+
+        if (markerColor == BoardMarkerColor.Yellow)
+        {
+            manualMarkers[position] = BoardMarkerColor.Red;
+            return;
+        }
+
+        if (markerColor == BoardMarkerColor.Red)
+        {
+            manualMarkers[position] = BoardMarkerColor.Blue;
+            return;
+        }
+
+        manualMarkers.Remove(position);
     }
 
     private void Square_Click(object sender, RoutedEventArgs e)
     {
         Focus();
+
+        if (game.IsGameOver)
+        {
+            StatusChanged?.Invoke(game.GetStatusText("Spiel ist beendet"));
+            return;
+        }
 
         if (sender is not Button { Tag: BoardPosition clicked })
         {
@@ -151,11 +229,7 @@ public sealed class ChessBoardView : Grid
         BoardPosition from = selectedSquare.Value;
         if (game.TryMove(from, clicked, out MoveResult? result) && result is not null)
         {
-            selectedSquare = null;
-            selectedMoves = [];
-            Refresh();
-            MoveCompleted?.Invoke(result);
-            StatusChanged?.Invoke(result.Notation);
+            CompleteMove(result);
             return;
         }
 
@@ -171,6 +245,16 @@ public sealed class ChessBoardView : Grid
         StatusChanged?.Invoke("Ungueltiger Zug");
     }
 
+    private void CompleteMove(MoveResult result)
+    {
+        selectedSquare = null;
+        selectedMoves = [];
+        Refresh();
+        AnimateSquare(result.To, result.CapturedPiece is not null);
+        MoveCompleted?.Invoke(result);
+        StatusChanged?.Invoke(game.GetStatusText(result.Notation));
+    }
+
     private void SelectSquare(BoardPosition position, ChessPiece? piece)
     {
         if (piece is null || piece.Color != game.CurrentTurn)
@@ -182,7 +266,7 @@ public sealed class ChessBoardView : Grid
         selectedSquare = position;
         selectedMoves = game.GetLegalMoves(position);
         Refresh();
-        StatusChanged?.Invoke($"{position.ToAlgebraic()} ausgewaehlt");
+        StatusChanged?.Invoke(game.GetStatusText($"{position.ToAlgebraic()} ausgewaehlt"));
     }
 
     private void Refresh()
@@ -208,8 +292,43 @@ public sealed class ChessBoardView : Grid
                     position,
                     selectedSquare == position,
                     selectedMoves.Contains(position));
+                ApplySquareBorder(square, position);
             }
         }
+    }
+
+    private void ApplySquareBorder(Button square, BoardPosition position)
+    {
+        if (manualMarkers.TryGetValue(position, out BoardMarkerColor markerColor))
+        {
+            square.BorderBrush = theme.GetMarkerBrush(markerColor);
+            square.BorderThickness = new Thickness(5);
+            return;
+        }
+
+        if (square.IsKeyboardFocused)
+        {
+            square.BorderBrush = theme.GetFocusBrush();
+            square.BorderThickness = new Thickness(2);
+            return;
+        }
+
+        square.BorderThickness = new Thickness(0);
+    }
+
+    private void AnimateSquare(BoardPosition position, bool isCapture)
+    {
+        Button square = squares[position.Row, position.Column];
+        ScaleTransform scaleTransform = new(1, 1);
+        square.RenderTransform = scaleTransform;
+        square.RenderTransformOrigin = new Point(0.5, 0.5);
+
+        double peak = isCapture ? 1.12 : 1.06;
+        Duration duration = TimeSpan.FromMilliseconds(isCapture ? 190 : 140);
+        DoubleAnimation grow = new(1, peak, duration) { AutoReverse = true };
+
+        scaleTransform.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+        scaleTransform.BeginAnimation(ScaleTransform.ScaleYProperty, grow.Clone());
     }
 
     private void RefreshCoordinates()
@@ -234,8 +353,4 @@ public sealed class ChessBoardView : Grid
         return IsFlipped ? BoardSize - 1 - position.Column : position.Column;
     }
 
-    private string GetTurnText()
-    {
-        return game.CurrentTurn == PieceColor.White ? "Weiss am Zug" : "Schwarz am Zug";
-    }
 }

@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="560" viewBox="0 0 960 560">
+  <rect width="960" height="560" fill="#202329"/>
+  <rect x="24" y="24" width="512" height="512" fill="#111318"/>
+  <g transform="translate(40 40)">
+    <script type="application/ecmascript"><![CDATA[]]></script>
+    <rect width="480" height="480" fill="#e8daba"/>
+    <g>
+      <rect x="60" y="0" width="60" height="60" fill="#647e5c"/>
+      <rect x="180" y="0" width="60" height="60" fill="#647e5c"/>
+      <rect x="300" y="0" width="60" height="60" fill="#647e5c"/>
+      <rect x="420" y="0" width="60" height="60" fill="#647e5c"/>
+      <rect x="0" y="60" width="60" height="60" fill="#647e5c"/>
+      <rect x="120" y="60" width="60" height="60" fill="#647e5c"/>
+      <rect x="240" y="60" width="60" height="60" fill="#647e5c"/>
+      <rect x="360" y="60" width="60" height="60" fill="#647e5c"/>
+      <rect x="60" y="120" width="60" height="60" fill="#647e5c"/>
+      <rect x="180" y="120" width="60" height="60" fill="#647e5c"/>
+      <rect x="300" y="120" width="60" height="60" fill="#647e5c"/>
+      <rect x="420" y="120" width="60" height="60" fill="#647e5c"/>
+      <rect x="0" y="180" width="60" height="60" fill="#647e5c"/>
+      <rect x="120" y="180" width="60" height="60" fill="#647e5c"/>
+      <rect x="240" y="180" width="60" height="60" fill="#647e5c"/>
+      <rect x="360" y="180" width="60" height="60" fill="#647e5c"/>
+      <rect x="60" y="240" width="60" height="60" fill="#647e5c"/>
+      <rect x="180" y="240" width="60" height="60" fill="#647e5c"/>
+      <rect x="300" y="240" width="60" height="60" fill="#647e5c"/>
+      <rect x="420" y="240" width="60" height="60" fill="#647e5c"/>
+      <rect x="0" y="300" width="60" height="60" fill="#647e5c"/>
+      <rect x="120" y="300" width="60" height="60" fill="#647e5c"/>
+      <rect x="240" y="300" width="60" height="60" fill="#647e5c"/>
+      <rect x="360" y="300" width="60" height="60" fill="#647e5c"/>
+      <rect x="60" y="360" width="60" height="60" fill="#647e5c"/>
+      <rect x="180" y="360" width="60" height="60" fill="#647e5c"/>
+      <rect x="300" y="360" width="60" height="60" fill="#647e5c"/>
+      <rect x="420" y="360" width="60" height="60" fill="#647e5c"/>
+      <rect x="0" y="420" width="60" height="60" fill="#647e5c"/>
+      <rect x="120" y="420" width="60" height="60" fill="#647e5c"/>
+      <rect x="240" y="420" width="60" height="60" fill="#647e5c"/>
+      <rect x="360" y="420" width="60" height="60" fill="#647e5c"/>
+    </g>
+    <g font-family="Segoe UI Symbol, Arial" font-size="40" text-anchor="middle" dominant-baseline="central">
+      <text x="30" y="30" fill="#23262c">♜</text><text x="90" y="30" fill="#23262c">♞</text><text x="150" y="30" fill="#23262c">♝</text><text x="210" y="30" fill="#23262c">♛</text><text x="270" y="30" fill="#23262c">♚</text><text x="330" y="30" fill="#23262c">♝</text><text x="390" y="30" fill="#23262c">♞</text><text x="450" y="30" fill="#23262c">♜</text>
+      <text x="30" y="90" fill="#23262c">♟</text><text x="90" y="90" fill="#23262c">♟</text><text x="150" y="90" fill="#23262c">♟</text><text x="210" y="90" fill="#23262c">♟</text><text x="270" y="90" fill="#23262c">♟</text><text x="330" y="90" fill="#23262c">♟</text><text x="390" y="90" fill="#23262c">♟</text><text x="450" y="90" fill="#23262c">♟</text>
+      <text x="30" y="390" fill="#f4f1e8">♙</text><text x="90" y="390" fill="#f4f1e8">♙</text><text x="150" y="390" fill="#f4f1e8">♙</text><text x="210" y="390" fill="#f4f1e8">♙</text><text x="270" y="390" fill="#f4f1e8">♙</text><text x="330" y="390" fill="#f4f1e8">♙</text><text x="390" y="390" fill="#f4f1e8">♙</text><text x="450" y="390" fill="#f4f1e8">♙</text>
+      <text x="30" y="450" fill="#f4f1e8">♖</text><text x="90" y="450" fill="#f4f1e8">♘</text><text x="150" y="450" fill="#f4f1e8">♗</text><text x="210" y="450" fill="#f4f1e8">♕</text><text x="270" y="450" fill="#f4f1e8">♔</text><text x="330" y="450" fill="#f4f1e8">♗</text><text x="390" y="450" fill="#f4f1e8">♘</text><text x="450" y="450" fill="#f4f1e8">♖</text>
+    </g>
+  </g>
+  <g transform="translate(576 48)">
+    <text x="0" y="0" fill="#f4f1e8" font-family="Segoe UI, Arial" font-size="38" font-weight="600">Schach</text>
+    <rect x="0" y="56" width="320" height="74" rx="6" fill="#2b3038" stroke="#3a414c"/>
+    <text x="16" y="84" fill="#aab0ba" font-family="Segoe UI, Arial" font-size="13">Status</text>
+    <text x="16" y="112" fill="#f4f1e8" font-family="Segoe UI, Arial" font-size="20" font-weight="600">Weiss am Zug</text>
+    <rect x="0" y="146" width="320" height="92" rx="6" fill="#252a31" stroke="#333a44"/>
+    <text x="16" y="176" fill="#f4f1e8" font-family="Segoe UI, Arial" font-size="16" font-weight="600">Schachuhr</text>
+    <text x="16" y="214" fill="#f4f1e8" font-family="Segoe UI, Arial" font-size="24" font-weight="600">10:00</text>
+    <text x="176" y="214" fill="#f4f1e8" font-family="Segoe UI, Arial" font-size="24" font-weight="600">10:00</text>
+    <rect x="0" y="254" width="320" height="128" rx="6" fill="#252a31" stroke="#333a44"/>
+    <text x="16" y="286" fill="#f4f1e8" font-family="Segoe UI, Arial" font-size="16" font-weight="600">Zugliste</text>
+    <text x="16" y="322" fill="#c8cdd5" font-family="Segoe UI, Arial" font-size="15">1. Weiss: e2-e4</text>
+    <text x="16" y="350" fill="#c8cdd5" font-family="Segoe UI, Arial" font-size="15">1. Schwarz: e7-e5</text>
+  </g>
+</svg>
