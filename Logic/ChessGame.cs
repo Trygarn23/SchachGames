@@ -34,8 +34,10 @@ public sealed class ChessGame
 
     private readonly ChessPiece?[,] board = new ChessPiece?[8, 8];
     private readonly List<MoveRecord> moveHistory = [];
+    private readonly Dictionary<string, int> positionOccurrences = [];
     private BoardPosition? enPassantTarget;
     private int fullMoveNumber;
+    private int halfMoveClock;
     private bool blackKingMoved;
     private bool blackKingSideRookMoved;
     private bool blackQueenSideRookMoved;
@@ -58,16 +60,22 @@ public sealed class ChessGame
 
     public IReadOnlyList<MoveRecord> MoveHistory => moveHistory;
 
+    public int FullMoveNumber => fullMoveNumber;
+
+    public int HalfMoveClock => halfMoveClock;
+
     public void Reset()
     {
         Array.Clear(board);
         moveHistory.Clear();
+        positionOccurrences.Clear();
         CurrentTurn = PieceColor.White;
         IsGameOver = false;
         EndReason = GameEndReason.None;
         Winner = null;
         enPassantTarget = null;
         fullMoveNumber = 1;
+        halfMoveClock = 0;
         whiteKingMoved = false;
         blackKingMoved = false;
         whiteKingSideRookMoved = false;
@@ -79,6 +87,7 @@ public sealed class ChessGame
         PlacePawns(1, PieceColor.Black);
         PlacePawns(6, PieceColor.White);
         PlaceBackRank(7, PieceColor.White);
+        RecordCurrentPosition();
     }
 
     public ChessPiece? GetPiece(BoardPosition position)
@@ -144,6 +153,115 @@ public sealed class ChessGame
         return kingPosition is not null && IsSquareAttacked(kingPosition.Value, Opposite(color));
     }
 
+    public BoardPosition? GetKingPosition(PieceColor color)
+    {
+        return FindKing(color);
+    }
+
+    public string ToFen()
+    {
+        string boardPart = string.Join("/", Enumerable.Range(0, 8).Select(row =>
+        {
+            int empty = 0;
+            List<string> parts = [];
+            for (int column = 0; column < 8; column++)
+            {
+                ChessPiece? piece = board[row, column];
+                if (piece is null)
+                {
+                    empty++;
+                    continue;
+                }
+
+                if (empty > 0)
+                {
+                    parts.Add(empty.ToString());
+                    empty = 0;
+                }
+
+                parts.Add(GetFenPieceChar(piece).ToString());
+            }
+
+            if (empty > 0)
+            {
+                parts.Add(empty.ToString());
+            }
+
+            return string.Concat(parts);
+        }));
+
+        string activeColor = CurrentTurn == PieceColor.White ? "w" : "b";
+        string castling = GetFenCastlingRights();
+        string enPassant = enPassantTarget?.ToAlgebraic() ?? "-";
+        return $"{boardPart} {activeColor} {castling} {enPassant} {halfMoveClock} {fullMoveNumber}";
+    }
+
+    public void LoadFen(string fen)
+    {
+        string[] parts = fen.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 4)
+        {
+            throw new InvalidOperationException("FEN benoetigt mindestens Brett, Zugfarbe, Rochaderechte und En-passant-Feld.");
+        }
+
+        Array.Clear(board);
+        moveHistory.Clear();
+        positionOccurrences.Clear();
+
+        string[] ranks = parts[0].Split('/');
+        if (ranks.Length != 8)
+        {
+            throw new InvalidOperationException("FEN-Brett muss acht Reihen enthalten.");
+        }
+
+        for (int row = 0; row < 8; row++)
+        {
+            int column = 0;
+            foreach (char token in ranks[row])
+            {
+                if (char.IsDigit(token))
+                {
+                    column += token - '0';
+                    continue;
+                }
+
+                if (column >= 8)
+                {
+                    throw new InvalidOperationException("FEN-Reihe ist zu lang.");
+                }
+
+                board[row, column] = ParseFenPiece(token);
+                column++;
+            }
+
+            if (column != 8)
+            {
+                throw new InvalidOperationException("FEN-Reihe ist unvollstaendig.");
+            }
+        }
+
+        CurrentTurn = parts[1] switch
+        {
+            "w" => PieceColor.White,
+            "b" => PieceColor.Black,
+            _ => throw new InvalidOperationException("FEN-Zugfarbe muss w oder b sein.")
+        };
+
+        SetCastlingRightsFromFen(parts[2]);
+        enPassantTarget = parts[3] == "-"
+            ? null
+            : BoardPosition.TryParse(parts[3], out BoardPosition target)
+                ? target
+                : throw new InvalidOperationException("FEN-En-passant-Feld ist ungueltig.");
+        halfMoveClock = parts.Length > 4 && int.TryParse(parts[4], out int halfMoves) ? halfMoves : 0;
+        fullMoveNumber = parts.Length > 5 && int.TryParse(parts[5], out int fullMoves) ? Math.Max(1, fullMoves) : 1;
+        IsGameOver = false;
+        EndReason = GameEndReason.None;
+        Winner = null;
+        RecordCurrentPosition();
+        UpdateGameState();
+    }
+
     public string GetStatusText(string prefix)
     {
         if (IsGameOver)
@@ -152,6 +270,12 @@ public sealed class ChessGame
             {
                 GameEndReason.Checkmate => $"{prefix}\nSchachmatt. {GetColorName(Winner!.Value)} gewinnt.",
                 GameEndReason.Stalemate => $"{prefix}\nPatt. Das Spiel endet remis.",
+                GameEndReason.FiftyMoveRule => $"{prefix}\nRemis nach 50-Zuege-Regel.",
+                GameEndReason.ThreefoldRepetition => $"{prefix}\nRemis durch dreifache Stellungswiederholung.",
+                GameEndReason.InsufficientMaterial => $"{prefix}\nRemis durch unzureichendes Material.",
+                GameEndReason.Resignation => $"{prefix}\n{GetColorName(Winner!.Value)} gewinnt durch Aufgabe.",
+                GameEndReason.DrawAgreement => $"{prefix}\nRemis durch Einigung.",
+                GameEndReason.Timeout => $"{prefix}\n{GetColorName(Winner!.Value)} gewinnt auf Zeit.",
                 _ => prefix
             };
         }
@@ -167,6 +291,7 @@ public sealed class ChessGame
         ChessGame clone = new();
         Array.Clear(clone.board);
         clone.moveHistory.Clear();
+        clone.positionOccurrences.Clear();
 
         for (int row = 0; row < 8; row++)
         {
@@ -186,6 +311,7 @@ public sealed class ChessGame
         clone.Winner = Winner;
         clone.enPassantTarget = enPassantTarget;
         clone.fullMoveNumber = fullMoveNumber;
+        clone.halfMoveClock = halfMoveClock;
         clone.whiteKingMoved = whiteKingMoved;
         clone.blackKingMoved = blackKingMoved;
         clone.whiteKingSideRookMoved = whiteKingSideRookMoved;
@@ -193,6 +319,11 @@ public sealed class ChessGame
         clone.blackKingSideRookMoved = blackKingSideRookMoved;
         clone.blackQueenSideRookMoved = blackQueenSideRookMoved;
         clone.moveHistory.AddRange(moveHistory);
+        foreach ((string key, int count) in positionOccurrences)
+        {
+            clone.positionOccurrences[key] = count;
+        }
+
         return clone;
     }
 
@@ -201,7 +332,17 @@ public sealed class ChessGame
         return TryMove(from, to, out _);
     }
 
+    public bool TryMove(BoardPosition from, BoardPosition to, PieceType promotionType)
+    {
+        return TryMove(from, to, promotionType, out _);
+    }
+
     public bool TryMove(BoardPosition from, BoardPosition to, out MoveResult? result)
+    {
+        return TryMove(from, to, PieceType.Queen, out result);
+    }
+
+    public bool TryMove(BoardPosition from, BoardPosition to, PieceType promotionType, out MoveResult? result)
     {
         result = null;
         if (IsGameOver)
@@ -209,7 +350,9 @@ public sealed class ChessGame
             return false;
         }
 
-        LegalMove? move = GetLegalMovesFrom(from).FirstOrDefault(candidate => candidate.To == to);
+        LegalMove? move = GetLegalMovesFrom(from)
+            .FirstOrDefault(candidate => candidate.To == to &&
+                (candidate.PromotionType is null || candidate.PromotionType == promotionType));
         if (move is null)
         {
             return false;
@@ -217,6 +360,32 @@ public sealed class ChessGame
 
         result = ApplyMove(move);
         return true;
+    }
+
+    public bool TryMove(LegalMove move, out MoveResult? result)
+    {
+        return TryMove(move.From, move.To, move.PromotionType ?? PieceType.Queen, out result);
+    }
+
+    public void Resign(PieceColor color)
+    {
+        IsGameOver = true;
+        EndReason = GameEndReason.Resignation;
+        Winner = Opposite(color);
+    }
+
+    public void AcceptDraw()
+    {
+        IsGameOver = true;
+        EndReason = GameEndReason.DrawAgreement;
+        Winner = null;
+    }
+
+    public void Timeout(PieceColor color)
+    {
+        IsGameOver = true;
+        EndReason = GameEndReason.Timeout;
+        Winner = Opposite(color);
     }
 
     private MoveResult ApplyMove(LegalMove move)
@@ -243,6 +412,9 @@ public sealed class ChessGame
         }
 
         UpdateCastlingRights(move);
+        halfMoveClock = movedPiece.Type == PieceType.Pawn || capturedPiece is not null
+            ? 0
+            : halfMoveClock + 1;
         enPassantTarget = GetNewEnPassantTarget(move);
 
         int moveNumber = fullMoveNumber;
@@ -272,6 +444,7 @@ public sealed class ChessGame
         }
 
         CurrentTurn = Opposite(CurrentTurn);
+        RecordCurrentPosition();
         UpdateGameState();
         return result with { };
     }
@@ -282,6 +455,8 @@ public sealed class ChessGame
         PieceColor nextTurn = Opposite(result.MovedPiece.Color);
         if (WouldGameEndAfterCurrentPosition(nextTurn, out GameEndReason reason))
         {
+
+
             return reason == GameEndReason.Checkmate ? $"{notation}#" : $"{notation}=";
         }
 
@@ -292,6 +467,27 @@ public sealed class ChessGame
     {
         PieceColor originalTurn = CurrentTurn;
         CurrentTurn = sideToMove;
+        if (halfMoveClock >= 100)
+        {
+            CurrentTurn = originalTurn;
+            reason = GameEndReason.FiftyMoveRule;
+            return true;
+        }
+
+        if (positionOccurrences.TryGetValue(GetRepetitionKey(), out int repetitions) && repetitions >= 3)
+        {
+            CurrentTurn = originalTurn;
+            reason = GameEndReason.ThreefoldRepetition;
+            return true;
+        }
+
+        if (HasInsufficientMaterial())
+        {
+            CurrentTurn = originalTurn;
+            reason = GameEndReason.InsufficientMaterial;
+            return true;
+        }
+
         bool hasLegalMoves = GetLegalMovesForCurrentTurn().Count > 0;
         CurrentTurn = originalTurn;
 
@@ -307,6 +503,30 @@ public sealed class ChessGame
 
     private void UpdateGameState()
     {
+        if (halfMoveClock >= 100)
+        {
+            IsGameOver = true;
+            EndReason = GameEndReason.FiftyMoveRule;
+            Winner = null;
+            return;
+        }
+
+        if (positionOccurrences.TryGetValue(GetRepetitionKey(), out int repetitions) && repetitions >= 3)
+        {
+            IsGameOver = true;
+            EndReason = GameEndReason.ThreefoldRepetition;
+            Winner = null;
+            return;
+        }
+
+        if (HasInsufficientMaterial())
+        {
+            IsGameOver = true;
+            EndReason = GameEndReason.InsufficientMaterial;
+            Winner = null;
+            return;
+        }
+
         bool hasLegalMoves = GetLegalMovesForCurrentTurn().Count > 0;
         if (hasLegalMoves)
         {
@@ -405,14 +625,16 @@ public sealed class ChessGame
         MoveKind moveKind)
     {
         bool promotes = to.Row is 0 or 7;
-        moves.Add(new LegalMove(
-            from,
-            to,
-            piece,
-            capturedPiece,
-            promotes ? MoveKind.Promotion : moveKind,
-            promotes ? PieceType.Queen : null,
-            capturedPosition));
+        if (!promotes)
+        {
+            moves.Add(new LegalMove(from, to, piece, capturedPiece, moveKind, null, capturedPosition));
+            return;
+        }
+
+        foreach (PieceType promotionType in new[] { PieceType.Queen, PieceType.Rook, PieceType.Bishop, PieceType.Knight })
+        {
+            moves.Add(new LegalMove(from, to, piece, capturedPiece, MoveKind.Promotion, promotionType, capturedPosition));
+        }
     }
 
     private void AddPawnCapture(List<LegalMove> moves, BoardPosition from, BoardPosition target, ChessPiece piece)
@@ -775,6 +997,117 @@ public sealed class ChessGame
         }
 
         return null;
+    }
+
+    private void RecordCurrentPosition()
+    {
+        string key = GetRepetitionKey();
+        positionOccurrences[key] = positionOccurrences.TryGetValue(key, out int count) ? count + 1 : 1;
+    }
+
+    private string GetRepetitionKey()
+    {
+        string fen = ToFen();
+        string[] parts = fen.Split(' ');
+        return string.Join(' ', parts.Take(4));
+    }
+
+    private bool HasInsufficientMaterial()
+    {
+        List<ChessPiece> pieces = [];
+        for (int row = 0; row < 8; row++)
+        {
+            for (int column = 0; column < 8; column++)
+            {
+                ChessPiece? piece = board[row, column];
+                if (piece is not null)
+                {
+                    pieces.Add(piece);
+                }
+            }
+        }
+
+        List<ChessPiece> nonKings = pieces.Where(piece => piece.Type != PieceType.King).ToList();
+        if (nonKings.Count == 0)
+        {
+            return true;
+        }
+
+        if (nonKings.Count == 1)
+        {
+            return nonKings[0].Type is PieceType.Bishop or PieceType.Knight;
+        }
+
+        return false;
+    }
+
+    private string GetFenCastlingRights()
+    {
+        string rights = string.Empty;
+        if (!whiteKingMoved && !whiteKingSideRookMoved && GetPiece(new BoardPosition(7, 7)) is { Type: PieceType.Rook, Color: PieceColor.White })
+        {
+            rights += "K";
+        }
+
+        if (!whiteKingMoved && !whiteQueenSideRookMoved && GetPiece(new BoardPosition(7, 0)) is { Type: PieceType.Rook, Color: PieceColor.White })
+        {
+            rights += "Q";
+        }
+
+        if (!blackKingMoved && !blackKingSideRookMoved && GetPiece(new BoardPosition(0, 7)) is { Type: PieceType.Rook, Color: PieceColor.Black })
+        {
+            rights += "k";
+        }
+
+        if (!blackKingMoved && !blackQueenSideRookMoved && GetPiece(new BoardPosition(0, 0)) is { Type: PieceType.Rook, Color: PieceColor.Black })
+        {
+            rights += "q";
+        }
+
+        return rights.Length == 0 ? "-" : rights;
+    }
+
+    private void SetCastlingRightsFromFen(string castlingRights)
+    {
+        whiteKingMoved = !castlingRights.Contains('K') && !castlingRights.Contains('Q');
+        blackKingMoved = !castlingRights.Contains('k') && !castlingRights.Contains('q');
+        whiteKingSideRookMoved = !castlingRights.Contains('K');
+        whiteQueenSideRookMoved = !castlingRights.Contains('Q');
+        blackKingSideRookMoved = !castlingRights.Contains('k');
+        blackQueenSideRookMoved = !castlingRights.Contains('q');
+    }
+
+    private static char GetFenPieceChar(ChessPiece piece)
+    {
+        char token = piece.Type switch
+        {
+            PieceType.Pawn => 'p',
+            PieceType.Knight => 'n',
+            PieceType.Bishop => 'b',
+            PieceType.Rook => 'r',
+            PieceType.Queen => 'q',
+            PieceType.King => 'k',
+            _ => throw new InvalidOperationException("Unbekannte Figur.")
+        };
+
+        return piece.Color == PieceColor.White ? char.ToUpperInvariant(token) : token;
+    }
+
+    private static ChessPiece ParseFenPiece(char token)
+    {
+        PieceColor color = char.IsUpper(token) ? PieceColor.White : PieceColor.Black;
+        PieceType type = char.ToLowerInvariant(token) switch
+        {
+            'p' => PieceType.Pawn,
+            'n' => PieceType.Knight,
+            'b' => PieceType.Bishop,
+            'r' => PieceType.Rook,
+            'q' => PieceType.Queen,
+            'k' => PieceType.King,
+            _ => throw new InvalidOperationException($"Ungueltige FEN-Figur: {token}")
+        };
+
+        return new ChessPiece(type, color);
     }
 
     private bool HasKingMoved(PieceColor color)

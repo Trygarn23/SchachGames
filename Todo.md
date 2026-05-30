@@ -20,18 +20,34 @@
 - [x] Rechtsklick-Markierungen wie bei chess.com planen.
 - [x] Rechtsklick-Markierungen auf Feldern setzen und entfernen.
 - [x] Mehrere Markierungsfarben per Rechtsklick optional planen.
-- [ ] Bauernumwandlung per Auswahlfenster anbieten: Dame, Turm, Laeufer, Springer.
-- [ ] Spielende-Dialog mit Gewinner, Grund und Neustart-Button anzeigen.
-- [ ] Zugliste per Klick auf einen Zug fokussieren oder hervorheben.
-- [ ] Letzten Zug auf dem Brett markieren.
-- [ ] Koenig im Schach visuell hervorheben.
-- [ ] Captured-Pieces-Anzeige nach Materialwert sortieren.
-- [ ] Seitenbereich bei kleinen Fenstern kompakter machen.
-- [ ] Tastaturbedienung erweitern: Pfeiltasten fuer Feldauswahl.
-- [ ] Tastaturbedienung erweitern: Enter zum Auswaehlen/Ziehen.
-- [ ] Hinweis anzeigen, wenn keine legalen Zuege fuer eine Figur existieren.
-- [ ] KI-Farbe auswaehlbar machen: Schwarz, Weiss oder beide aus.
-- [ ] Modusauswahl anbieten: Mensch gegen Mensch, Mensch gegen KI.
+- [x] Bauernumwandlung per Auswahlfenster anbieten: Dame, Turm, Laeufer, Springer.
+- [x] Spielende-Dialog mit Gewinner, Grund und Neustart-Button anzeigen.
+- [x] Zugliste per Klick auf einen Zug fokussieren oder hervorheben.
+- [x] Letzten Zug auf dem Brett markieren.
+- [x] Koenig im Schach visuell hervorheben.
+- [x] Captured-Pieces-Anzeige nach Materialwert sortieren.
+- [x] Seitenbereich bei kleinen Fenstern kompakter machen.
+- [x] Tastaturbedienung erweitern: Pfeiltasten fuer Feldauswahl.
+- [x] Tastaturbedienung erweitern: Enter zum Auswaehlen/Ziehen.
+- [x] Hinweis anzeigen, wenn keine legalen Zuege fuer eine Figur existieren.
+- [x] KI-Farbe auswaehlbar machen: Schwarz, Weiss oder beide aus.
+- [x] Modusauswahl anbieten: Mensch gegen Mensch, Mensch gegen KI.
+- [ ] Schnellstart-Panel mit grossen Kacheln fuer Klassisch, Blitz, Fun Mode und Analyse.
+- [ ] In-Game Command Palette planen, z. B. Strg+K fuer Aktionen.
+- [ ] Kontextmenue auf dem Brett mit Markieren, Pfeil setzen, Analyse starten.
+- [ ] Pfeil-Markierungen zwischen zwei Feldern wie bei chess.com planen.
+- [ ] Drag-and-drop fuer Figuren ergaenzen.
+- [ ] Optionales Click-and-drag-Premove-System planen.
+- [ ] Premove fuer Online-/KI-Modus optional ergaenzen.
+- [ ] Undo/Redo-Schaltflaechen fuer Analysemodus sichtbar machen.
+- [ ] Sidebar einklappbar machen.
+- [ ] Mini-Materialbilanz anzeigen, z. B. +3 fuer Weiss.
+- [ ] Bewertungsbalken fuer Analyse/KI anzeigen.
+- [ ] Mini-Board fuer Varianten oder letzte Stellung anzeigen.
+- [ ] Spielerprofile mit Namen, Avatar/Farbe und Statistik anzeigen.
+- [ ] Endscreen mit Partie-Zusammenfassung, Genauigkeit und groesstem Fehler planen.
+- [ ] Tutorial-Overlay fuer erste Benutzung planen.
+- [ ] Modale Hilfe mit Schachregeln und Tastaturkuerzeln ergaenzen.
 
 ---
 
@@ -65,22 +81,70 @@
 - [x] Bauernumwandlung implementieren.
 - [x] Zugnotation planen.
 - [x] Zughistorie als Modell anlegen.
-- [ ] Bauernumwandlung auf frei waehlbare Figur umstellen.
-- [ ] 50-Zuege-Regel planen.
-- [ ] 50-Zuege-Regel implementieren.
-- [ ] Dreifache Stellungswiederholung planen.
-- [ ] Dreifache Stellungswiederholung implementieren.
-- [ ] Remis durch unzureichendes Material erkennen.
-- [ ] Aufgabe eines Spielers modellieren.
-- [ ] Remisangebot modellieren.
-- [ ] Zugvalidierung fuer importierte Partien robuster melden.
-- [ ] FEN-Export planen.
-- [ ] FEN-Export implementieren.
-- [ ] FEN-Import planen.
-- [ ] FEN-Import implementieren.
-- [ ] PGN-Notation langfristig auf SAN umstellen.
-- [ ] Halbzugzaehler und Vollzugnummer fuer FEN/PGN sauber fuehren.
-- [ ] Spielzustand fuer Analysemodus kopierbar machen.
+- [x] Bauernumwandlung auf frei waehlbare Figur umstellen.
+- [x] 50-Zuege-Regel planen.
+- [x] 50-Zuege-Regel implementieren.
+- [x] Dreifache Stellungswiederholung planen.
+- [x] Dreifache Stellungswiederholung implementieren.
+- [x] Remis durch unzureichendes Material erkennen.
+- [x] Aufgabe eines Spielers modellieren.
+- [x] Remisangebot modellieren.
+- [x] Zugvalidierung fuer importierte Partien robuster melden.
+- [x] FEN-Export planen.
+- [x] FEN-Export implementieren.
+- [x] FEN-Import planen.
+- [x] FEN-Import implementieren.
+- [x] PGN-Notation langfristig auf SAN umstellen.
+- [x] Halbzugzaehler und Vollzugnummer fuer FEN/PGN sauber fuehren.
+- [x] Spielzustand fuer Analysemodus kopierbar machen.
+- [ ] Variantenbaum als Datenmodell planen.
+- [ ] Variantenbaum mit Hauptvariante und Nebenvarianten implementieren.
+- [ ] Premove-Regelvalidierung modellieren.
+- [ ] Trainingsaufgaben als Puzzle-Modell anlegen.
+- [ ] Puzzle-Loesung mit Zugfolge und Bewertung modellieren.
+- [ ] Fun Mode: Atomic Chess planen.
+- [ ] Fun Mode: Atomic Chess implementieren.
+- [ ] Fun Mode: Horde Chess planen.
+- [ ] Fun Mode: Horde Chess implementieren.
+- [ ] Fun Mode: King of the Hill planen.
+- [ ] Fun Mode: King of the Hill implementieren.
+- [ ] Fun Mode: Three-Check planen.
+- [ ] Fun Mode: Three-Check implementieren.
+- [ ] Fun Mode: Fog of War planen.
+- [ ] Fun Mode: Fog of War implementieren.
+- [ ] Zufallsstart nach Chess960/Fischer Random planen.
+- [ ] Chess960-Rochaderegeln implementieren.
+- [ ] Handicap-Startstellungen planen, z. B. ohne Dame.
+- [ ] Partie-Metadaten modellieren: Event, Ort, Datum, Spieler, Ergebnis.
+- [ ] Elo-/Ratingmodell fuer lokale Profile planen.
+
+---
+
+## Fun Modes / Varianten
+- [ ] Fun Mode Hub als eigene Kategorie im Startbereich planen.
+- [ ] Klassisches Schach immer klar von Fun Modes trennen.
+- [ ] Fun Modes mit kurzer Regelbeschreibung im UI anzeigen.
+- [ ] Fun Mode: Chess960 mit zufaelliger, aber gueltiger Grundstellung anbieten.
+- [ ] Fun Mode: Bauernkrieg planen, nur Bauern und Koenige.
+- [ ] Fun Mode: Springerduell planen, Fokus auf Springerbewegungen.
+- [ ] Fun Mode: Koenigjagd planen, Sieg durch Erreichen bestimmter Zielfelder.
+- [ ] Fun Mode: Drei-Schach mit Zaehler im UI anzeigen.
+- [ ] Fun Mode: Horde Chess mit asymmetrischer Startstellung visualisieren.
+- [ ] Fun Mode: No-Queen-Modus fuer schnelle Partien planen.
+- [ ] Fun Mode: Randomizer, der nach jedem Zug ein Brett-Theme wechselt.
+- [ ] Fun Mode: Chaos Board mit zufaellig verteilten legalen Figuren planen.
+- [ ] Fun Mode: Power-Up-Felder als Arcade-Experiment planen.
+- [ ] Fun Mode: Blindfold-Training mit ausgeblendeten Figuren planen.
+- [ ] Fun Mode: Memory-Schach mit kurz eingeblendeten Figuren pruefen.
+- [ ] Fun Mode: Puzzle-Rush mit Zeitlimit planen.
+- [ ] Fun Mode: Survival gegen staerker werdende KI planen.
+- [ ] Fun Mode: Boss-KI mit besonderer Persoenlichkeit planen.
+- [ ] Fun Mode: Familienmodus mit vereinfachten Hinweisen planen.
+- [ ] Fun Mode: Trainingsbrett fuer einzelne Figuren planen.
+- [ ] Fun Modes in gespeicherten Partien eindeutig kennzeichnen.
+- [ ] Fun Modes im Ergebnisdialog mit eigenem Namen anzeigen.
+- [ ] Fun Modes einzeln aktivieren/deaktivieren koennen.
+- [ ] Regeltexte fuer Fun Modes in README dokumentieren.
 
 ---
 
@@ -96,19 +160,33 @@
 - [x] KI-Zuege in letzter Zug, geschlagene Figuren und Zugliste anzeigen.
 - [x] KI nach Schach-Erkennung auf echte legale Schachzuege begrenzen.
 - [x] KI-Spielstaerke nach vollstaendigen Sonderregeln neu feinjustieren.
-- [ ] KI flackern beheben beim Zug.
-- [ ] KI-Farbe konfigurierbar machen.
-- [ ] KI-Zug abbrechen, wenn waehrend des Denkens ein neues Spiel gestartet wird.
-- [ ] KI-Denkzeit pro Schwierigkeit konfigurierbar machen.
-- [ ] Mittel-KI um einfache Koenigssicherheit erweitern.
-- [ ] Schwer-KI mit tieferer Suche planen.
-- [ ] Schwer-KI mit Minimax und Alpha-Beta-Pruning implementieren.
-- [ ] Bewertungsfunktion um Mobilitaet erweitern.
-- [ ] Bewertungsfunktion um Bauernstruktur erweitern.
-- [ ] Bewertungsfunktion um Koenigssicherheit erweitern.
-- [ ] Eroeffnungszuege optional als kleine Bibliothek planen.
-- [ ] KI-Zug im Verlauf als KI-Zug kennzeichnen.
-- [ ] Analyse der besten KI-Kandidaten optional anzeigen.
+- [x] KI flackern beheben beim Zug.
+- [x] KI-Farbe konfigurierbar machen.
+- [x] KI-Zug abbrechen, wenn waehrend des Denkens ein neues Spiel gestartet wird.
+- [x] KI-Denkzeit pro Schwierigkeit konfigurierbar machen.
+- [x] Mittel-KI um einfache Koenigssicherheit erweitern.
+- [x] Schwer-KI mit tieferer Suche planen.
+- [x] Schwer-KI mit Minimax und Alpha-Beta-Pruning implementieren.
+- [x] Bewertungsfunktion um Mobilitaet erweitern.
+- [x] Bewertungsfunktion um Bauernstruktur erweitern.
+- [x] Bewertungsfunktion um Koenigssicherheit erweitern.
+- [x] Eroeffnungszuege optional als kleine Bibliothek planen.
+- [x] KI-Zug im Verlauf als KI-Zug kennzeichnen.
+- [x] Analyse der besten KI-Kandidaten optional anzeigen.
+- [ ] KI-Persoenlichkeiten planen: defensiv, aggressiv, taktisch, chaotisch.
+- [ ] KI-Persoenlichkeiten in Bewertungsfunktion abbilden.
+- [ ] Fun-KI mit bewusst riskanten Zuegen ergaenzen.
+- [ ] Coach-KI planen, die nach Fehlern Hinweise gibt.
+- [ ] Coach-Kommentare nach jedem Zug optional anzeigen.
+- [ ] Blunder-Erkennung planen.
+- [ ] Blunder-Erkennung implementieren.
+- [ ] Beste-Zug-Hinweis per Button anzeigen.
+- [ ] Eroeffnungsbuch als JSON laden.
+- [ ] Engine- und interne KI im Analysemodus vergleichbar anzeigen.
+- [ ] KI-Debug-Panel mit Kandidaten, Scores und Suchtiefe ergaenzen.
+- [ ] Adaptiven Schwierigkeitsgrad planen, der sich an Spielerstaerke anpasst.
+- [ ] Trainingsmodus: KI macht absichtlich typische Anfaengerfehler.
+- [ ] Puzzle-Generator aus gespielten Partien planen.
 
 ---
 
@@ -127,18 +205,56 @@
 - [x] Animation fuer geschlagene Figuren optional planen.
 - [x] Rechtsklick-Markierungen visuell definieren.
 - [x] Rechtsklick-Markierungen mit moeglichen Zugmarkierungen abstimmen.
-- [ ] Nach Markieren von Feldern mit Linksklick alle Markierungen entfernen.
-- [ ] Figuren-Assets als echte Grafiken pruefen.
-- [ ] Unicode-Figuren gegen SVG/PNG-Figurenset abwaegen.
-- [ ] Theme-Palette zentraler strukturieren.
-- [ ] Markierungsfarben im Light Theme pruefen.
-- [ ] Markierungsfarben im Dark Theme pruefen.
-- [ ] Letzter-Zug-Markierung visuell definieren.
-- [ ] Schach-Markierung fuer Koenig visuell definieren.
-- [ ] Matt/Patt-Endzustand optisch deutlicher gestalten.
-- [ ] Zuganimation bei deaktivierter Animation abschaltbar machen.
-- [ ] UI-Skalierung bei 125%, 150% und 200% Windows-Skalierung pruefen.
-- [ ] Farben auf ausreichenden Kontrast pruefen.
+- [x] Nach Markieren von Feldern mit Linksklick alle Markierungen entfernen.
+- [x] Figuren-Assets als echte Grafiken pruefen.
+- [x] Unicode-Figuren gegen SVG/PNG-Figurenset abwaegen.
+- [x] Theme-Palette zentraler strukturieren.
+- [x] Markierungsfarben im Light Theme pruefen.
+- [x] Markierungsfarben im Dark Theme pruefen.
+- [x] Letzter-Zug-Markierung visuell definieren.
+- [x] Schach-Markierung fuer Koenig visuell definieren.
+- [x] Matt/Patt-Endzustand optisch deutlicher gestalten.
+- [x] Zuganimation bei deaktivierter Animation abschaltbar machen.
+- [x] UI-Skalierung bei 125%, 150% und 200% Windows-Skalierung pruefen.
+- [x] Farben auf ausreichenden Kontrast pruefen.
+- [ ] Theme-Editor mit Farbraedern fuer Brett, Markierungen und Hintergrund planen.
+- [ ] Benutzerdefinierte Farbpaletten speichern und laden.
+- [ ] Vorgefertigte Themes ergaenzen: Holz, Marmor, Neon, Nacht, Minimal, Retro.
+- [ ] Figurensets ergaenzen: Klassisch, Modern, Pixel, Holz, Glas, Minimal.
+- [ ] Figurenform zwischen Unicode, SVG und Bildset umschaltbar machen.
+- [ ] Brettform-Optionen planen: flach, 3D-Kante, Holzrahmen, randlos.
+- [ ] Feldformen optional abrunden oder als Kreise/Hex-Optik darstellen.
+- [ ] Hintergrundoptionen planen: Vollfarbe, Bild, dezente Textur.
+- [ ] Animierte Hintergrundszene optional planen.
+- [ ] Partikeleffekt bei Schachmatt optional planen.
+- [ ] Schlaganimation mit kurzem Aufblitzen oder Figurensplitter planen.
+- [ ] Zugpfeile mit Farb- und Staerkeauswahl ergaenzen.
+- [ ] Koordinaten-Stil umschaltbar machen: innen, aussen, ausgeblendet.
+- [ ] Brettperspektive leicht isometrisch optional planen.
+- [ ] 3D-Brett mit Three.js oder WPF 3D als langfristige Option pruefen.
+- [ ] Sound-Sets planen: Holzbrett, Turnier, Arcade, Minimal.
+- [ ] Haptisches/visuelles Feedback fuer ungueltige Zuege verbessern.
+- [ ] High-Contrast-Theme fuer Barrierefreiheit ergaenzen.
+- [ ] Farbenblind-Modi planen: Deuteranopie, Protanopie, Tritanopie.
+- [ ] Animationsgeschwindigkeit einstellbar machen.
+- [ ] Figurenschatten als Option ein-/ausschaltbar machen.
+- [ ] Feldtexturen pro Theme fein abstimmen.
+- [ ] Brett-Rand mit Material, Farbe und Breite konfigurierbar machen.
+- [ ] Glow-Effekt fuer Schach und Matt optional anbieten.
+- [ ] Retro-CRT-Filter als Fun Visual planen.
+- [ ] Pixel-Art-Modus mit passenden Figuren und Sounds planen.
+- [ ] Glas-/Frosted-Glass-Theme als Experiment planen.
+- [ ] Neon-Theme mit reduzierten Animationen fuer Lesbarkeit pruefen.
+- [ ] Jahreszeiten-Themes planen: Winter, Herbst, Sommer, Nacht.
+- [ ] Feiertags-Theme optional und abschaltbar planen.
+- [ ] Benutzerdefiniertes Hintergrundbild zuschneiden und skalieren.
+- [ ] Figuren-Sets pro Spieler getrennt erlauben.
+- [ ] Brett kann optional spiegelnd oder matt wirken.
+- [ ] Letzte Designauswahl als Preset speichern.
+- [ ] Presets importieren und exportieren.
+- [ ] Preview-Kachel fuer jedes Theme im Einstellungsfenster anzeigen.
+- [ ] Theme-Reset auf Standardwerte anbieten.
+- [ ] Kontrastwarnung anzeigen, wenn eigene Farben schlecht lesbar sind.
 
 ---
 
@@ -153,19 +269,32 @@
 - [x] Unit-Test-Projekt planen.
 - [x] Unit-Tests fuer Startstellung ergaenzen.
 - [x] Unit-Tests fuer Basiszuege ergaenzen.
-- [ ] Unit-Tests fuer Rochade ergaenzen.
-- [ ] Unit-Tests fuer verbotene Rochade durch Schach ergaenzen.
-- [ ] Unit-Tests fuer En passant ergaenzen.
-- [ ] Unit-Tests fuer Bauernumwandlung ergaenzen.
-- [ ] Unit-Tests fuer Schach-Erkennung ergaenzen.
-- [ ] Unit-Tests fuer Matt-Erkennung ergaenzen.
-- [ ] Unit-Tests fuer Patt-Erkennung ergaenzen.
-- [ ] Unit-Tests fuer FEN-Import/Export vorbereiten.
-- [ ] Unit-Tests fuer Speichern/Laden ergaenzen.
-- [ ] Unit-Tests fuer PGN-Export ergaenzen.
-- [ ] UI-Smoke-Test planen.
-- [ ] Regressionstest fuer KI-Zug ohne Crash ergaenzen.
-- [ ] Build und Tests vor jedem groesseren Feature ausfuehren.
+- [x] Unit-Tests fuer Rochade ergaenzen.
+- [x] Unit-Tests fuer verbotene Rochade durch Schach ergaenzen.
+- [x] Unit-Tests fuer En passant ergaenzen.
+- [x] Unit-Tests fuer Bauernumwandlung ergaenzen.
+- [x] Unit-Tests fuer Schach-Erkennung ergaenzen.
+- [x] Unit-Tests fuer Matt-Erkennung ergaenzen.
+- [x] Unit-Tests fuer Patt-Erkennung ergaenzen.
+- [x] Unit-Tests fuer FEN-Import/Export vorbereiten.
+- [x] Unit-Tests fuer Speichern/Laden ergaenzen.
+- [x] Unit-Tests fuer PGN-Export ergaenzen.
+- [x] UI-Smoke-Test planen.
+- [x] Regressionstest fuer KI-Zug ohne Crash ergaenzen.
+- [x] Build und Tests vor jedem groesseren Feature ausfuehren.
+- [ ] Snapshot-Tests fuer Themes planen.
+- [ ] Tests fuer benutzerdefinierte Themes ergaenzen.
+- [ ] Tests fuer Fun Modes pro Regelvariante planen.
+- [ ] Tests fuer Chess960-Startstellungen ergaenzen.
+- [ ] Tests fuer Variantenbaum ergaenzen.
+- [ ] Tests fuer Puzzle-Loesungen ergaenzen.
+- [ ] Tests fuer Bewertungsbalken/Analyseausgabe ergaenzen.
+- [ ] Performance-Test fuer KI-Suche ergaenzen.
+- [ ] Langlauf-Test fuer 100 KI-Partien ohne Crash planen.
+- [ ] UI-Test fuer Promotiondialog planen.
+- [ ] UI-Test fuer Theme-Wechsel planen.
+- [ ] Accessibility-Checkliste ergaenzen.
+- [ ] Manuelle QA-Matrix fuer Aufloesungen und DPI-Stufen fuehren.
 
 ---
 
@@ -175,28 +304,51 @@
 - [x] PGN-Export planen.
 - [x] PGN-Import planen.
 - [x] Schachuhr planen.
-- [ ] Zeit planen koennen anhand verschiedener Modi, z. B. Blitz, Bullet, Standard.
-- [ ] Eigene Zeitkontrolle mit Minuten und Inkrement anbieten.
-- [ ] Uhr pausieren und fortsetzen koennen.
-- [ ] Uhr nach Spielende automatisch stoppen.
+- [x] Zeit planen koennen anhand verschiedener Modi, z. B. Blitz, Bullet, Standard.
+- [x] Eigene Zeitkontrolle mit Minuten und Inkrement anbieten.
+- [x] Uhr pausieren und fortsetzen koennen.
+- [x] Uhr nach Spielende automatisch stoppen.
+- [x] Bei Bewegungen soundeffekte optional abspielen.
+- [x] Sounds bei Schach, Matt und Patt optional abspielen.
+- [x] Sounds bei Schlagen anderer Figuren optional abspielen.
 - [x] Lokales Spiel Mensch gegen Mensch verbessern.
 - [x] Einfache KI planen.
 - [x] Engine-Anbindung optional planen.
 - [x] Einstellungen persistent speichern.
 - [x] GitHub README mit Screenshot und Build-Anleitung schreiben.
-- [ ] Einstellungsfenster fuer Theme, KI, Zeit und Animationen planen.
-- [ ] Letzte Fensterposition und Fenstergroesse speichern.
-- [ ] Zuletzt geoeffnete Spielstanddatei merken.
-- [ ] Export als Bild/Screenshot planen.
-- [ ] Analysemodus mit freiem Brett planen.
-- [ ] Zuege vor/zurueck durch die Partie planen.
-- [ ] Partie nachtraeglich analysieren koennen.
-- [ ] UCI-Engine-Anbindung konkretisieren.
-- [ ] Stockfish-Anbindung optional implementieren.
-- [ ] Release-Build und Installer planen.
-- [ ] GitHub Actions fuer Build/Test planen.
-- [ ] Changelog einfuehren.
+- [x] Einstellungsfenster fuer Theme, KI, Zeit und Animationen planen.
+- [x] Letzte Fensterposition und Fenstergroesse speichern.
+- [x] Zuletzt geoeffnete Spielstanddatei merken.
+- [x] Export als Bild/Screenshot planen.
+- [x] Analysemodus mit freiem Brett planen.
+- [x] Zuege vor/zurueck durch die Partie planen.
+- [x] Partie nachtraeglich analysieren koennen.
+- [x] UCI-Engine-Anbindung konkretisieren.
+- [x] Stockfish-Anbindung optional implementieren.
+- [x] Release-Build und Installer planen.
+- [x] GitHub Actions fuer Build/Test planen.
+- [x] Changelog einfuehren.
 - [x] Version im UI anzeigen.
+- [ ] Fun Mode Hub mit eigener Startseite planen.
+- [ ] Puzzle-/Taktiktrainer planen.
+- [ ] Taegliche Aufgabe lokal generieren oder aus Datei laden.
+- [ ] Statistik-Dashboard fuer gespielte Partien planen.
+- [ ] Lokale Erfolge/Achievements planen.
+- [ ] Spieler-Profile mit Verlauf, Siegquote und Lieblingsfarbe speichern.
+- [ ] Partie als animiertes GIF oder MP4 exportieren.
+- [ ] Theme-Presets teilen/importieren.
+- [ ] Plugin-System fuer eigene Fun Modes langfristig pruefen.
+- [ ] Online-Modus als langfristige Idee dokumentieren.
+- [ ] Lokaler Hotseat-Turniermodus planen.
+- [ ] Schweizer-System-Turnierverwaltung optional planen.
+- [ ] Trainingsplan fuer Eroeffnungen planen.
+- [ ] Repertoire-Manager fuer Weiss/Schwarz planen.
+- [ ] Cloud-Sync nur als langfristige Option dokumentieren.
+- [ ] Portable-Version ohne Installation planen.
+- [ ] Auto-Update-Strategie pruefen.
+- [ ] Crash-Report/Logdatei lokal planen.
+- [ ] Mehrsprachigkeit Deutsch/Englisch vorbereiten.
+- [ ] Credits/About-Dialog mit Version, Build und Lizenzinfos ergaenzen.
 
 ---
 

@@ -21,12 +21,12 @@ public sealed partial class PgnService
             MoveRecord? black = group.FirstOrDefault(move => move.Color == PieceColor.Black);
             if (white is not null)
             {
-                builder.Append($"{white.Notation} ");
+                builder.Append($"{ToSan(white)} ");
             }
 
             if (black is not null)
             {
-                builder.Append($"{black.Notation} ");
+                builder.Append($"{ToSan(black)} ");
             }
         }
 
@@ -43,46 +43,87 @@ public sealed partial class PgnService
             .Where(token => !token.EndsWith('.') && token is not "*" and not "1-0" and not "0-1" and not "1/2-1/2")
             .ToArray();
 
+        ChessGame game = new();
         List<GameFileService.SavedMove> moves = [];
-        PieceColor side = PieceColor.White;
         foreach (string token in tokens)
         {
-            string cleaned = token.Trim().TrimEnd('+', '#');
-            if (cleaned is "O-O" or "0-0")
+            string cleaned = token.Trim().TrimEnd('+', '#', '=');
+            LegalMove move = ResolveMove(game, cleaned);
+            moves.Add(new GameFileService.SavedMove(move.From.ToAlgebraic(), move.To.ToAlgebraic()));
+            if (!game.TryMove(move, out _))
             {
-                moves.Add(CreateCastlingMove(side, kingside: true));
+                throw new InvalidOperationException($"PGN-Zug konnte nicht gespielt werden: {token}");
             }
-            else if (cleaned is "O-O-O" or "0-0-0")
-            {
-                moves.Add(CreateCastlingMove(side, kingside: false));
-            }
-            else
-            {
-                MatchCollection matches = SquareRegex().Matches(cleaned);
-                if (matches.Count >= 2)
-                {
-                    moves.Add(new GameFileService.SavedMove(matches[0].Value, matches[1].Value));
-                }
-            }
-
-            side = side == PieceColor.White ? PieceColor.Black : PieceColor.White;
         }
 
         return moves;
     }
 
-    private static GameFileService.SavedMove CreateCastlingMove(PieceColor side, bool kingside)
+    private static LegalMove ResolveMove(ChessGame game, string token)
     {
-        string from = side == PieceColor.White ? "e1" : "e8";
-        string to = (side, kingside) switch
+        IReadOnlyList<LegalMove> legalMoves = game.GetLegalMovesForCurrentTurn();
+        MatchCollection coordinateMatches = SquareRegex().Matches(token);
+        if (coordinateMatches.Count >= 2)
         {
-            (PieceColor.White, true) => "g1",
-            (PieceColor.White, false) => "c1",
-            (PieceColor.Black, true) => "g8",
-            _ => "c8"
-        };
+            BoardPosition.TryParse(coordinateMatches[0].Value, out BoardPosition from);
+            BoardPosition.TryParse(coordinateMatches[1].Value, out BoardPosition to);
+            LegalMove? coordinateMove = legalMoves.FirstOrDefault(move => move.From == from && move.To == to);
+            if (coordinateMove is not null)
+            {
+                return coordinateMove;
+            }
+        }
 
-        return new GameFileService.SavedMove(from, to);
+        string normalized = token
+            .Replace("e.p.", string.Empty, StringComparison.Ordinal)
+            .Trim();
+        return legalMoves.FirstOrDefault(move => ToSan(move).TrimEnd('+', '#', '=') == normalized) ??
+            throw new InvalidOperationException($"PGN-Zug ist nicht eindeutig oder ungueltig: {token}");
+    }
+
+    private static string ToSan(MoveRecord move)
+    {
+        string suffix = move.Notation.EndsWith('+') || move.Notation.EndsWith('#') || move.Notation.EndsWith('=')
+            ? move.Notation[^1].ToString()
+            : string.Empty;
+
+        return move.Kind switch
+        {
+            MoveKind.CastlingKingSide => $"O-O{suffix}",
+            MoveKind.CastlingQueenSide => $"O-O-O{suffix}",
+            MoveKind.Promotion => $"{move.To.ToAlgebraic()}={GetPieceLetter(move.MovedPiece.Type)}{suffix}",
+            _ when move.MovedPiece.Type == PieceType.Pawn && move.CapturedPiece is not null =>
+                $"{move.From.ToAlgebraic()[0]}x{move.To.ToAlgebraic()}{suffix}",
+            _ when move.MovedPiece.Type == PieceType.Pawn => $"{move.To.ToAlgebraic()}{suffix}",
+            _ => $"{GetPieceLetter(move.MovedPiece.Type)}{(move.CapturedPiece is null ? string.Empty : "x")}{move.To.ToAlgebraic()}{suffix}"
+        };
+    }
+
+    private static string ToSan(LegalMove move)
+    {
+        return move.Kind switch
+        {
+            MoveKind.CastlingKingSide => "O-O",
+            MoveKind.CastlingQueenSide => "O-O-O",
+            MoveKind.Promotion => $"{move.To.ToAlgebraic()}={GetPieceLetter(move.PromotionType ?? PieceType.Queen)}",
+            _ when move.MovedPiece.Type == PieceType.Pawn && move.CapturedPiece is not null =>
+                $"{move.From.ToAlgebraic()[0]}x{move.To.ToAlgebraic()}",
+            _ when move.MovedPiece.Type == PieceType.Pawn => move.To.ToAlgebraic(),
+            _ => $"{GetPieceLetter(move.MovedPiece.Type)}{(move.CapturedPiece is null ? string.Empty : "x")}{move.To.ToAlgebraic()}"
+        };
+    }
+
+    private static string GetPieceLetter(PieceType type)
+    {
+        return type switch
+        {
+            PieceType.King => "K",
+            PieceType.Queen => "Q",
+            PieceType.Rook => "R",
+            PieceType.Bishop => "B",
+            PieceType.Knight => "N",
+            _ => string.Empty
+        };
     }
 
     [GeneratedRegex(@"\[[^\]]+\]")]

@@ -17,8 +17,22 @@
                 <Separator />
                 <MenuItem Header="PGN _exportieren..." Click="ExportPgnMenuItem_Click" />
                 <MenuItem Header="PGN _importieren..." Click="ImportPgnMenuItem_Click" />
+                <MenuItem Header="FEN e_xportieren..." Click="ExportFenMenuItem_Click" />
+                <MenuItem Header="FEN i_mportieren..." Click="ImportFenMenuItem_Click" />
+                <MenuItem Header="_Screenshot exportieren..." Click="ExportScreenshotMenuItem_Click" />
+                <Separator />
+                <MenuItem Header="_Einstellungen..." Click="SettingsMenuItem_Click" />
                 <Separator />
                 <MenuItem Header="_Beenden" Click="ExitMenuItem_Click" />
+            </MenuItem>
+            <MenuItem Header="_Spiel">
+                <MenuItem Header="_Aufgeben" Click="ResignMenuItem_Click" />
+                <MenuItem Header="_Remis vereinbaren" Click="DrawMenuItem_Click" />
+                <Separator />
+                <MenuItem Header="Uhr _pausieren/fortsetzen" Click="PauseClockMenuItem_Click" />
+                <Separator />
+                <MenuItem Header="Zug _zurueck" Click="PreviousMoveMenuItem_Click" />
+                <MenuItem Header="Zug _vor" Click="NextMoveMenuItem_Click" />
             </MenuItem>
         </Menu>
 
@@ -47,7 +61,7 @@
             </Grid.RowDefinitions>
 
             <StackPanel>
-                    <TextBlock Text="Version 1.0"
+                    <TextBlock Text="Version 1.1"
                            Foreground="#AAB0BA" />
                     <TextBlock Text="Schach"
                            FontSize="34"
@@ -137,6 +151,16 @@
                                                Text="10:00" />
                                 </StackPanel>
                             </Grid>
+                            <ComboBox x:Name="ClockPresetComboBox"
+                                      Margin="0,12,0,0"
+                                      Height="34"
+                                      SelectionChanged="ClockPresetComboBox_SelectionChanged"
+                                      SelectedIndex="2">
+                                <ComboBoxItem Content="Bullet 1+0" Tag="1|0" />
+                                <ComboBoxItem Content="Blitz 3+2" Tag="3|2" />
+                                <ComboBoxItem Content="Standard 10+0" Tag="10|0" />
+                                <ComboBoxItem Content="Rapid 15+10" Tag="15|10" />
+                            </ComboBox>
                         </StackPanel>
                     </Border>
 
@@ -206,6 +230,14 @@
                                        FontSize="15"
                                        FontWeight="SemiBold"
                                        Foreground="#F4F1E8" />
+                            <ComboBox x:Name="GameModeComboBox"
+                                      Margin="0,10,0,0"
+                                      Height="34"
+                                      SelectionChanged="GameModeComboBox_SelectionChanged"
+                                      SelectedIndex="1">
+                                <ComboBoxItem Content="Mensch gegen Mensch" Tag="HumanVsHuman" />
+                                <ComboBoxItem Content="Mensch gegen KI" Tag="HumanVsAi" />
+                            </ComboBox>
                             <ComboBox x:Name="AiDifficultyComboBox"
                                       Margin="0,10,0,0"
                                       Height="34"
@@ -216,11 +248,19 @@
                                 <ComboBoxItem Content="Mittel" Tag="Medium" />
                                 <ComboBoxItem Content="Schwer" Tag="Hard" />
                             </ComboBox>
+                            <ComboBox x:Name="AiSideComboBox"
+                                      Margin="0,10,0,0"
+                                      Height="34"
+                                      SelectionChanged="AiSideComboBox_SelectionChanged"
+                                      SelectedIndex="1">
+                                <ComboBoxItem Content="KI spielt Weiss" Tag="White" />
+                                <ComboBoxItem Content="KI spielt Schwarz" Tag="Black" />
+                            </ComboBox>
                             <TextBlock Margin="0,8,0,0"
                                        Foreground="#AAB0BA"
                                        FontSize="12"
                                        TextWrapping="Wrap"
-                                       Text="Die KI spielt Schwarz." />
+                                       Text="Die KI-Farbe ist konfigurierbar." />
                         </StackPanel>
                     </Border>
 
@@ -243,6 +283,19 @@
                                 <ComboBoxItem Content="Dunkel" Tag="Dark" />
                                 <ComboBoxItem Content="Hell" Tag="Light" />
                             </ComboBox>
+                            <CheckBox x:Name="AnimationCheckBox"
+                                      Margin="4,12,0,0"
+                                      Checked="AnimationCheckBox_Changed"
+                                      Unchecked="AnimationCheckBox_Changed"
+                                      Content="Animationen"
+                                      Foreground="#F4F1E8"
+                                      IsChecked="True" />
+                            <CheckBox x:Name="SoundCheckBox"
+                                      Margin="4,8,0,0"
+                                      Checked="SoundCheckBox_Changed"
+                                      Unchecked="SoundCheckBox_Changed"
+                                      Content="Sounds"
+                                      Foreground="#F4F1E8" />
                         </StackPanel>
                     </Border>
 

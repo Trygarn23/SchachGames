@@ -4,5 +4,11 @@ public enum GameEndReason
 {
     None,
     Checkmate,
-    Stalemate
+    Stalemate,
+    FiftyMoveRule,
+    ThreefoldRepetition,
+    InsufficientMaterial,
+    Resignation,
+    DrawAgreement,
+    Timeout
 }

@@ -21,6 +21,9 @@ public sealed class ChessBoardView : Grid
     private readonly Dictionary<BoardPosition, BoardMarkerColor> manualMarkers = [];
     private BoardPosition? selectedSquare;
     private IReadOnlyList<BoardPosition> selectedMoves = [];
+    private BoardPosition? highlightedFrom;
+    private BoardPosition? highlightedTo;
+    private BoardPosition keyboardPosition = new(7, 4);
 
     public ChessBoardView(ChessGame game, BoardTheme theme)
     {
@@ -30,6 +33,7 @@ public sealed class ChessBoardView : Grid
         Width = 668;
         Height = 668;
         Focusable = true;
+        KeyDown += ChessBoardView_KeyDown;
 
         BuildBoard();
         Refresh();
@@ -39,6 +43,12 @@ public sealed class ChessBoardView : Grid
 
     public event Action<MoveResult>? MoveCompleted;
 
+    public Func<PieceColor, PieceType>? PromotionRequested { get; set; }
+
+    public bool AnimationsEnabled { get; set; } = true;
+
+    public bool InteractionLocked { get; set; }
+
     public bool IsFlipped { get; private set; }
 
     public void StartNewGame()
@@ -46,6 +56,9 @@ public sealed class ChessBoardView : Grid
         game.Reset();
         selectedSquare = null;
         selectedMoves = [];
+        highlightedFrom = null;
+        highlightedTo = null;
+        keyboardPosition = new BoardPosition(7, 4);
         manualMarkers.Clear();
         Refresh();
         StatusChanged?.Invoke(game.GetStatusText("Neues Spiel gestartet"));
@@ -72,9 +85,17 @@ public sealed class ChessBoardView : Grid
         StatusChanged?.Invoke(game.GetStatusText(message));
     }
 
+    public void HighlightMove(MoveRecord move)
+    {
+        highlightedFrom = move.From;
+        highlightedTo = move.To;
+        Refresh();
+        squares[move.To.Row, move.To.Column].Focus();
+    }
+
     public bool TryPlayMove(LegalMove move)
     {
-        if (!game.TryMove(move.From, move.To, out MoveResult? result) || result is null)
+        if (!game.TryMove(move, out MoveResult? result) || result is null)
         {
             return false;
         }
@@ -207,6 +228,17 @@ public sealed class ChessBoardView : Grid
     private void Square_Click(object sender, RoutedEventArgs e)
     {
         Focus();
+        if (manualMarkers.Count > 0)
+        {
+            manualMarkers.Clear();
+        }
+
+        if (InteractionLocked)
+        {
+            StatusChanged?.Invoke(game.GetStatusText("Bitte auf den Gegenzug warten"));
+            Refresh();
+            return;
+        }
 
         if (game.IsGameOver)
         {
@@ -220,6 +252,7 @@ public sealed class ChessBoardView : Grid
         }
 
         ChessPiece? clickedPiece = game.GetPiece(clicked);
+        keyboardPosition = clicked;
         if (selectedSquare is null)
         {
             SelectSquare(clicked, clickedPiece);
@@ -227,7 +260,16 @@ public sealed class ChessBoardView : Grid
         }
 
         BoardPosition from = selectedSquare.Value;
-        if (game.TryMove(from, clicked, out MoveResult? result) && result is not null)
+        IReadOnlyList<LegalMove> targetMoves = game.GetLegalMovesFrom(from)
+            .Where(move => move.To == clicked)
+            .ToList();
+        PieceType promotionType = PieceType.Queen;
+        if (targetMoves.Any(move => move.Kind == MoveKind.Promotion))
+        {
+            promotionType = PromotionRequested?.Invoke(game.CurrentTurn) ?? PieceType.Queen;
+        }
+
+        if (game.TryMove(from, clicked, promotionType, out MoveResult? result) && result is not null)
         {
             CompleteMove(result);
             return;
@@ -249,6 +291,8 @@ public sealed class ChessBoardView : Grid
     {
         selectedSquare = null;
         selectedMoves = [];
+        highlightedFrom = result.From;
+        highlightedTo = result.To;
         Refresh();
         AnimateSquare(result.To, result.CapturedPiece is not null);
         MoveCompleted?.Invoke(result);
@@ -266,7 +310,38 @@ public sealed class ChessBoardView : Grid
         selectedSquare = position;
         selectedMoves = game.GetLegalMoves(position);
         Refresh();
+        if (selectedMoves.Count == 0)
+        {
+            StatusChanged?.Invoke(game.GetStatusText($"{position.ToAlgebraic()} hat keine legalen Zuege"));
+            return;
+        }
+
         StatusChanged?.Invoke(game.GetStatusText($"{position.ToAlgebraic()} ausgewaehlt"));
+    }
+
+    private void ChessBoardView_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down)
+        {
+            keyboardPosition = e.Key switch
+            {
+                Key.Left => new BoardPosition(keyboardPosition.Row, Math.Max(0, keyboardPosition.Column - 1)),
+                Key.Right => new BoardPosition(keyboardPosition.Row, Math.Min(7, keyboardPosition.Column + 1)),
+                Key.Up => new BoardPosition(Math.Max(0, keyboardPosition.Row - 1), keyboardPosition.Column),
+                Key.Down => new BoardPosition(Math.Min(7, keyboardPosition.Row + 1), keyboardPosition.Column),
+                _ => keyboardPosition
+            };
+
+            squares[keyboardPosition.Row, keyboardPosition.Column].Focus();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Enter)
+        {
+            Square_Click(squares[keyboardPosition.Row, keyboardPosition.Column], new RoutedEventArgs());
+            e.Handled = true;
+        }
     }
 
     private void Refresh()
@@ -291,7 +366,9 @@ public sealed class ChessBoardView : Grid
                 square.Background = theme.GetSquareBrush(
                     position,
                     selectedSquare == position,
-                    selectedMoves.Contains(position));
+                    selectedMoves.Contains(position),
+                    highlightedFrom == position || highlightedTo == position,
+                    piece?.Type == PieceType.King && game.IsInCheck(piece.Color));
                 ApplySquareBorder(square, position);
             }
         }
@@ -318,6 +395,11 @@ public sealed class ChessBoardView : Grid
 
     private void AnimateSquare(BoardPosition position, bool isCapture)
     {
+        if (!AnimationsEnabled)
+        {
+            return;
+        }
+
         Button square = squares[position.Row, position.Column];
         ScaleTransform scaleTransform = new(1, 1);
         square.RenderTransform = scaleTransform;

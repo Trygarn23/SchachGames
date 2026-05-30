@@ -18,9 +18,19 @@ public sealed class ChessAi
         {
             AiDifficulty.Easy => SelectRandomMove(moves),
             AiDifficulty.Medium => SelectBestMove(moves, ScoreMediumMove),
-            AiDifficulty.Hard => SelectBestMove(moves, move => ScoreHardMove(game, move)),
+            AiDifficulty.Hard => SelectBestMove(moves, move => ScoreHardMove(game, move, depth: 3)),
             _ => SelectRandomMove(moves)
         };
+    }
+
+    public IReadOnlyList<string> GetCandidateSummaries(ChessGame game, AiDifficulty difficulty, int maxCount = 3)
+    {
+        return game.GetLegalMovesForCurrentTurn()
+            .Select(move => new { Move = move, Score = difficulty == AiDifficulty.Hard ? ScoreHardMove(game, move, 2) : ScoreMediumMove(move) })
+            .OrderByDescending(candidate => candidate.Score)
+            .Take(maxCount)
+            .Select(candidate => $"{candidate.Move.Notation}: {candidate.Score}")
+            .ToList();
     }
 
     private LegalMove SelectRandomMove(IReadOnlyList<LegalMove> moves)
@@ -83,18 +93,21 @@ public sealed class ChessAi
         return score;
     }
 
-    private int ScoreHardMove(ChessGame game, LegalMove move)
+    private int ScoreHardMove(ChessGame game, LegalMove move, int depth)
     {
         ChessGame simulation = game.Clone();
-        if (!simulation.TryMove(move.From, move.To))
+        if (!simulation.TryMove(move, out _))
         {
             return int.MinValue;
         }
 
-        int score = ScoreMediumMove(move);
-        score += GetMaterialBalance(simulation, move.MovedPiece.Color);
-        score -= GetBestOpponentCaptureValue(simulation) * 8;
-        return score;
+        return Minimax(
+            simulation,
+            depth - 1,
+            move.MovedPiece.Color,
+            int.MinValue + 1,
+            int.MaxValue - 1,
+            maximizing: false);
     }
 
     private int GetBestOpponentCaptureValue(ChessGame simulation)
@@ -131,6 +144,89 @@ public sealed class ChessAi
         }
 
         return balance;
+    }
+
+    private int Minimax(
+        ChessGame game,
+        int depth,
+        PieceColor aiSide,
+        int alpha,
+        int beta,
+        bool maximizing)
+    {
+        if (depth == 0 || game.IsGameOver)
+        {
+            return EvaluatePosition(game, aiSide);
+        }
+
+        IReadOnlyList<LegalMove> moves = game.GetLegalMovesForCurrentTurn();
+        if (moves.Count == 0)
+        {
+            return EvaluatePosition(game, aiSide);
+        }
+
+        if (maximizing)
+        {
+            int best = int.MinValue + 1;
+            foreach (LegalMove move in moves)
+            {
+                ChessGame simulation = game.Clone();
+                simulation.TryMove(move, out _);
+                best = Math.Max(best, Minimax(simulation, depth - 1, aiSide, alpha, beta, maximizing: false));
+                alpha = Math.Max(alpha, best);
+                if (beta <= alpha)
+                {
+                    break;
+                }
+            }
+
+            return best;
+        }
+
+        int worst = int.MaxValue - 1;
+        foreach (LegalMove move in moves)
+        {
+            ChessGame simulation = game.Clone();
+            simulation.TryMove(move, out _);
+            worst = Math.Min(worst, Minimax(simulation, depth - 1, aiSide, alpha, beta, maximizing: true));
+            beta = Math.Min(beta, worst);
+            if (beta <= alpha)
+            {
+                break;
+            }
+        }
+
+        return worst;
+    }
+
+    private int EvaluatePosition(ChessGame game, PieceColor aiSide)
+    {
+        int score = GetMaterialBalance(game, aiSide);
+        score += game.GetLegalMovesForCurrentTurn().Count * (game.CurrentTurn == aiSide ? 4 : -4);
+        if (game.IsInCheck(aiSide))
+        {
+            score -= 120;
+        }
+
+        PieceColor opponent = aiSide == PieceColor.White ? PieceColor.Black : PieceColor.White;
+        if (game.IsInCheck(opponent))
+        {
+            score += 120;
+        }
+
+        if (game.IsGameOver)
+        {
+            if (game.Winner == aiSide)
+            {
+                score += 100_000;
+            }
+            else if (game.Winner == opponent)
+            {
+                score -= 100_000;
+            }
+        }
+
+        return score;
     }
 
     private static int GetCenterBonus(BoardPosition position)

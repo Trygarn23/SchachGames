@@ -28,6 +28,10 @@ dotnet build .\Schach.slnx
 dotnet test .\Schach.slnx
 ```
 
+## Release
+
+Siehe [docs/release.md](docs/release.md).
+
 ## Projektstruktur
 
 - `AI/`: KI-Schwierigkeitsgrade und Bewertungslogik.

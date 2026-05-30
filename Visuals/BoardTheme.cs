@@ -20,8 +20,18 @@ public sealed class BoardTheme
         set => mode = value;
     }
 
-    public Brush GetSquareBrush(BoardPosition position, bool isSelected, bool isLegalMove)
+    public Brush GetSquareBrush(
+        BoardPosition position,
+        bool isSelected,
+        bool isLegalMove,
+        bool isLastMove = false,
+        bool isKingInCheck = false)
     {
+        if (isKingInCheck)
+        {
+            return CreateBrush(197, 65, 65);
+        }
+
         if (isSelected)
         {
             return CreateBrush(232, 193, 106);
@@ -33,6 +43,11 @@ public sealed class BoardTheme
             return isLightSquare
                 ? CreateBrush(175, 188, 124)
                 : CreateBrush(126, 145, 84);
+        }
+
+        if (isLastMove)
+        {
+            return CreateBrush(198, 176, 86);
         }
 
         return Mode == BoardThemeMode.Light

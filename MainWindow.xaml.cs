@@ -1,7 +1,10 @@
 using System.IO;
+using System.Media;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using Schach.AI;
@@ -21,32 +24,49 @@ public partial class MainWindow : Window
     private readonly AppSettingsService settingsService = new();
     private readonly DispatcherTimer clockTimer = new();
     private readonly ChessBoardView boardView;
-    private readonly List<string> capturedByWhite = [];
-    private readonly List<string> capturedByBlack = [];
+    private readonly List<ChessPiece> capturedByWhite = [];
+    private readonly List<ChessPiece> capturedByBlack = [];
     private AppSettings appSettings = new();
     private TimeSpan whiteTime = TimeSpan.FromMinutes(10);
     private TimeSpan blackTime = TimeSpan.FromMinutes(10);
+    private int clockIncrementSeconds;
+    private int aiGeneration;
+    private bool isClockPaused;
     private bool isAiThinking;
     private bool isLoadingSettings = true;
+    private bool isReplaying;
+    private List<MoveRecord> analysisMoves = [];
+    private int analysisIndex = -1;
 
     public MainWindow()
     {
         InitializeComponent();
 
         boardView = new ChessBoardView(game, new BoardTheme());
+        boardView.PromotionRequested = RequestPromotion;
         boardView.StatusChanged += UpdateStatus;
         boardView.MoveCompleted += RecordMove;
         BoardHost.Child = boardView;
+        MoveHistoryList.SelectionChanged += MoveHistoryList_SelectionChanged;
 
         clockTimer.Interval = TimeSpan.FromSeconds(1);
         clockTimer.Tick += ClockTimer_Tick;
         clockTimer.Start();
 
         appSettings = settingsService.Load();
+        RestoreWindowBounds();
+        SelectComboBoxItemByTag(GameModeComboBox, appSettings.GameMode);
         SelectComboBoxItemByTag(AiDifficultyComboBox, appSettings.AiDifficulty);
+        SelectComboBoxItemByTag(AiSideComboBox, appSettings.AiSide);
         SelectComboBoxItemByTag(BoardThemeComboBox, appSettings.BoardTheme);
+        AnimationCheckBox.IsChecked = appSettings.AnimationsEnabled;
+        SoundCheckBox.IsChecked = appSettings.SoundsEnabled;
+        SelectClockPreset(appSettings.ClockMinutes, appSettings.ClockIncrementSeconds);
         isLoadingSettings = false;
         ApplySelectedBoardTheme(saveSettings: false);
+        ApplyAnimationSetting(saveSettings: false);
+        ApplyClockPreset(saveSettings: false);
+        Closing += (_, _) => SaveWindowBounds();
 
         ResetUiState();
         UpdateStatus(game.GetStatusText("Spiel bereit"));
@@ -56,33 +76,50 @@ public partial class MainWindow : Window
     {
         string color = move.MovedPiece.Color == PieceColor.White ? "Weiss" : "Schwarz";
         string notation = game.MoveHistory.LastOrDefault()?.Notation ?? move.Notation;
-        string historyEntry = $"{move.MoveNumber}. {color}: {notation}";
+        string historyEntry = $"{move.MoveNumber}. {color}: {notation}{(IsAiSide(move.MovedPiece.Color) ? " (KI)" : string.Empty)}";
         if (move.CapturedPiece is not null)
         {
             historyEntry += $" x {move.CapturedPiece.Symbol}";
             AddCapturedPiece(move.CapturedPiece);
         }
 
+        ApplyClockIncrement(move.MovedPiece.Color);
         LastMoveText.Text = historyEntry;
         MoveHistoryList.Items.Add(historyEntry);
         MoveHistoryList.ScrollIntoView(historyEntry);
+        PlayMoveSound(move);
+        if (game.IsGameOver)
+        {
+            UpdateStatus(game.GetStatusText(notation));
+        }
 
-        QueueAiMoveIfNeeded();
+        ShowGameEndDialogIfNeeded();
+
+        if (!isReplaying)
+        {
+            QueueAiMoveIfNeeded();
+        }
     }
 
     private void AddCapturedPiece(ChessPiece capturedPiece)
     {
         if (capturedPiece.Color == PieceColor.Black)
         {
-            capturedByWhite.Add(capturedPiece.Symbol);
+            capturedByWhite.Add(capturedPiece);
         }
         else
         {
-            capturedByBlack.Add(capturedPiece.Symbol);
+            capturedByBlack.Add(capturedPiece);
         }
 
-        CapturedByWhiteText.Text = capturedByWhite.Count == 0 ? "-" : string.Join(" ", capturedByWhite);
-        CapturedByBlackText.Text = capturedByBlack.Count == 0 ? "-" : string.Join(" ", capturedByBlack);
+        CapturedByWhiteText.Text = FormatCapturedPieces(capturedByWhite);
+        CapturedByBlackText.Text = FormatCapturedPieces(capturedByBlack);
+    }
+
+    private static string FormatCapturedPieces(IEnumerable<ChessPiece> pieces)
+    {
+        string text = string.Join(" ", pieces.OrderByDescending(piece => GetPieceValue(piece.Type)).Select(piece => piece.Symbol));
+        return string.IsNullOrWhiteSpace(text) ? "-" : text;
     }
 
     private void UpdateStatus(string message)
@@ -105,8 +142,10 @@ public partial class MainWindow : Window
         CapturedByWhiteText.Text = "-";
         CapturedByBlackText.Text = "-";
         whiteTime = TimeSpan.FromMinutes(10);
-        blackTime = TimeSpan.FromMinutes(10);
+        blackTime = TimeSpan.FromMinutes(appSettings.ClockMinutes);
+        whiteTime = TimeSpan.FromMinutes(appSettings.ClockMinutes);
         boardView.IsEnabled = true;
+        boardView.InteractionLocked = false;
         UpdateClockText();
     }
 
@@ -131,9 +170,7 @@ public partial class MainWindow : Window
 
         if (e.Key == Key.N)
         {
-            ResetUiState();
-            boardView.StartNewGame();
-            QueueAiMoveIfNeeded();
+            StartNewGame();
             e.Handled = true;
             return;
         }
@@ -160,6 +197,30 @@ public partial class MainWindow : Window
         }
 
         appSettings.AiDifficulty = GetSelectedComboBoxTag(AiDifficultyComboBox) ?? "Off";
+        settingsService.Save(appSettings);
+        QueueAiMoveIfNeeded();
+    }
+
+    private void AiSideComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (isLoadingSettings)
+        {
+            return;
+        }
+
+        appSettings.AiSide = GetSelectedComboBoxTag(AiSideComboBox) ?? "Black";
+        settingsService.Save(appSettings);
+        QueueAiMoveIfNeeded();
+    }
+
+    private void GameModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (isLoadingSettings)
+        {
+            return;
+        }
+
+        appSettings.GameMode = GetSelectedComboBoxTag(GameModeComboBox) ?? "HumanVsAi";
         settingsService.Save(appSettings);
         QueueAiMoveIfNeeded();
     }
@@ -193,7 +254,7 @@ public partial class MainWindow : Window
 
     private void ClockTimer_Tick(object? sender, EventArgs e)
     {
-        if (game.IsGameOver || !boardView.IsEnabled)
+        if (game.IsGameOver || isClockPaused)
         {
             return;
         }
@@ -204,8 +265,9 @@ public partial class MainWindow : Window
             if (whiteTime <= TimeSpan.Zero)
             {
                 whiteTime = TimeSpan.Zero;
-                boardView.IsEnabled = false;
+                game.Timeout(PieceColor.White);
                 UpdateStatus("Zeit abgelaufen. Schwarz gewinnt.");
+                ShowGameEndDialogIfNeeded();
             }
         }
         else
@@ -214,8 +276,9 @@ public partial class MainWindow : Window
             if (blackTime <= TimeSpan.Zero)
             {
                 blackTime = TimeSpan.Zero;
-                boardView.IsEnabled = false;
+                game.Timeout(PieceColor.Black);
                 UpdateStatus("Zeit abgelaufen. Weiss gewinnt.");
+                ShowGameEndDialogIfNeeded();
             }
         }
 
@@ -249,6 +312,8 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog(this) == true)
         {
             gameFileService.Save(game, dialog.FileName);
+            appSettings.LastGameFile = dialog.FileName;
+            settingsService.Save(appSettings);
             UpdateStatus(game.GetStatusText("Spiel gespeichert"));
         }
     }
@@ -263,6 +328,8 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog(this) == true)
         {
             gameFileService.Load(game, dialog.FileName);
+            appSettings.LastGameFile = dialog.FileName;
+            settingsService.Save(appSettings);
             ReloadGameFromModel("Spiel geladen");
         }
     }
@@ -297,6 +364,121 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ExportFenMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        SaveFileDialog dialog = new() { Filter = "FEN (*.fen)|*.fen|Text (*.txt)|*.txt", FileName = "stellung.fen" };
+        if (dialog.ShowDialog(this) == true)
+        {
+            File.WriteAllText(dialog.FileName, game.ToFen());
+            UpdateStatus(game.GetStatusText("FEN exportiert"));
+        }
+    }
+
+    private void ImportFenMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        OpenFileDialog dialog = new() { Filter = "FEN (*.fen)|*.fen|Text (*.txt)|*.txt|Alle Dateien (*.*)|*.*" };
+        if (dialog.ShowDialog(this) == true)
+        {
+            game.LoadFen(File.ReadAllText(dialog.FileName).Trim());
+            ReloadGameFromModel("FEN importiert");
+        }
+    }
+
+    private void ExportScreenshotMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        SaveFileDialog dialog = new() { Filter = "PNG (*.png)|*.png", FileName = "schach.png" };
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        RenderTargetBitmap bitmap = new((int)ActualWidth, (int)ActualHeight, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(this);
+        PngBitmapEncoder encoder = new();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using FileStream stream = File.Create(dialog.FileName);
+        encoder.Save(stream);
+        UpdateStatus(game.GetStatusText("Screenshot exportiert"));
+    }
+
+    private void SettingsMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        Window dialog = new()
+        {
+            Title = "Einstellungen",
+            Owner = this,
+            Width = 360,
+            Height = 260,
+            ResizeMode = ResizeMode.NoResize,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner
+        };
+
+        TextBox minutesBox = new() { Text = appSettings.ClockMinutes.ToString(), Margin = new Thickness(0, 4, 0, 10) };
+        TextBox incrementBox = new() { Text = appSettings.ClockIncrementSeconds.ToString(), Margin = new Thickness(0, 4, 0, 10) };
+        CheckBox animationsBox = new() { Content = "Animationen", IsChecked = appSettings.AnimationsEnabled, Margin = new Thickness(0, 4, 0, 6) };
+        CheckBox soundsBox = new() { Content = "Sounds", IsChecked = appSettings.SoundsEnabled, Margin = new Thickness(0, 4, 0, 12) };
+
+        StackPanel panel = new() { Margin = new Thickness(18) };
+        panel.Children.Add(new TextBlock { Text = "Minuten pro Seite" });
+        panel.Children.Add(minutesBox);
+        panel.Children.Add(new TextBlock { Text = "Inkrement in Sekunden" });
+        panel.Children.Add(incrementBox);
+        panel.Children.Add(animationsBox);
+        panel.Children.Add(soundsBox);
+
+        Button saveButton = new() { Content = "Speichern", Height = 32, MinWidth = 90, HorizontalAlignment = HorizontalAlignment.Right };
+        saveButton.Click += (_, _) =>
+        {
+            if (int.TryParse(minutesBox.Text, out int minutes) && minutes > 0 &&
+                int.TryParse(incrementBox.Text, out int increment) && increment >= 0)
+            {
+                appSettings.ClockMinutes = minutes;
+                appSettings.ClockIncrementSeconds = increment;
+                appSettings.AnimationsEnabled = animationsBox.IsChecked == true;
+                appSettings.SoundsEnabled = soundsBox.IsChecked == true;
+                settingsService.Save(appSettings);
+                AnimationCheckBox.IsChecked = appSettings.AnimationsEnabled;
+                SoundCheckBox.IsChecked = appSettings.SoundsEnabled;
+                clockIncrementSeconds = increment;
+                ResetUiState();
+                dialog.DialogResult = true;
+            }
+        };
+        panel.Children.Add(saveButton);
+        dialog.Content = panel;
+        dialog.ShowDialog();
+    }
+
+    private void ResignMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        game.Resign(game.CurrentTurn);
+        UpdateStatus(game.GetStatusText($"{(game.CurrentTurn == PieceColor.White ? "Weiss" : "Schwarz")} gibt auf"));
+        ShowGameEndDialogIfNeeded();
+    }
+
+    private void DrawMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        game.AcceptDraw();
+        UpdateStatus(game.GetStatusText("Remis vereinbart"));
+        ShowGameEndDialogIfNeeded();
+    }
+
+    private void PauseClockMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        isClockPaused = !isClockPaused;
+        UpdateStatus(game.GetStatusText(isClockPaused ? "Uhr pausiert" : "Uhr laeuft weiter"));
+    }
+
+    private void PreviousMoveMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        NavigateHistory(-1);
+    }
+
+    private void NextMoveMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        NavigateHistory(1);
+    }
+
     private void ExitMenuItem_Click(object sender, RoutedEventArgs e)
     {
         Close();
@@ -305,19 +487,20 @@ public partial class MainWindow : Window
     private async void QueueAiMoveIfNeeded()
     {
         AiDifficulty? difficulty = GetSelectedAiDifficulty();
-        if (difficulty is null || isAiThinking || game.IsGameOver || game.CurrentTurn != PieceColor.Black)
+        if (difficulty is null || isAiThinking || game.IsGameOver || !IsAiSide(game.CurrentTurn))
         {
             return;
         }
 
+        int generation = ++aiGeneration;
         isAiThinking = true;
-        boardView.IsEnabled = false;
+        boardView.InteractionLocked = true;
         UpdateStatus("KI denkt...");
 
         try
         {
-            await Task.Delay(300);
-            if (game.IsGameOver || game.CurrentTurn != PieceColor.Black)
+            await Task.Delay(GetAiDelay(difficulty.Value));
+            if (generation != aiGeneration || game.IsGameOver || !IsAiSide(game.CurrentTurn))
             {
                 return;
             }
@@ -333,7 +516,7 @@ public partial class MainWindow : Window
         }
         finally
         {
-            boardView.IsEnabled = true;
+            boardView.InteractionLocked = false;
             isAiThinking = false;
             boardView.Focus();
         }
@@ -343,7 +526,8 @@ public partial class MainWindow : Window
     {
         if (AiDifficultyComboBox?.SelectedItem is not ComboBoxItem item ||
             item.Tag is not string tag ||
-            tag == "Off")
+            tag == "Off" ||
+            GetSelectedComboBoxTag(GameModeComboBox) == "HumanVsHuman")
         {
             return null;
         }
@@ -355,6 +539,10 @@ public partial class MainWindow : Window
 
     private void StartNewGame()
     {
+        aiGeneration++;
+        analysisIndex = -1;
+        analysisMoves.Clear();
+        isClockPaused = false;
         ResetUiState();
         boardView.StartNewGame();
         QueueAiMoveIfNeeded();
@@ -362,10 +550,14 @@ public partial class MainWindow : Window
 
     private void ReloadGameFromModel(string message)
     {
+        aiGeneration++;
         ResetUiState();
         RebuildMoveUiFromHistory();
         boardView.ReloadFromGame(message);
-        QueueAiMoveIfNeeded();
+        if (!isReplaying)
+        {
+            QueueAiMoveIfNeeded();
+        }
     }
 
     private void RebuildMoveUiFromHistory()
@@ -388,6 +580,279 @@ public partial class MainWindow : Window
         {
             MoveHistoryList.ScrollIntoView(MoveHistoryList.Items[^1]);
         }
+    }
+
+    private void MoveHistoryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        int index = MoveHistoryList.SelectedIndex;
+        if (index >= 0 && index < game.MoveHistory.Count)
+        {
+            boardView.HighlightMove(game.MoveHistory[index]);
+        }
+    }
+
+    private PieceType RequestPromotion(PieceColor color)
+    {
+        Window dialog = new()
+        {
+            Title = $"{(color == PieceColor.White ? "Weiss" : "Schwarz")} wandelt um",
+            Owner = this,
+            Width = 330,
+            Height = 150,
+            ResizeMode = ResizeMode.NoResize,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner
+        };
+
+        PieceType selected = PieceType.Queen;
+        StackPanel panel = new() { Margin = new Thickness(16) };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Figur waehlen",
+            FontSize = 16,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 12)
+        });
+
+        WrapPanel buttons = new();
+        foreach ((string label, PieceType type) in new[]
+        {
+            ("Dame", PieceType.Queen),
+            ("Turm", PieceType.Rook),
+            ("Laeufer", PieceType.Bishop),
+            ("Springer", PieceType.Knight)
+        })
+        {
+            Button button = new()
+            {
+                Content = label,
+                Tag = type,
+                MinWidth = 68,
+                Margin = new Thickness(0, 0, 8, 8)
+            };
+            button.Click += (_, _) =>
+            {
+                selected = (PieceType)button.Tag;
+                dialog.DialogResult = true;
+            };
+            buttons.Children.Add(button);
+        }
+
+        panel.Children.Add(buttons);
+        dialog.Content = panel;
+        dialog.ShowDialog();
+        return selected;
+    }
+
+    private void ClockPresetComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        ApplyClockPreset(saveSettings: !isLoadingSettings);
+    }
+
+    private void ApplyClockPreset(bool saveSettings)
+    {
+        if (ClockPresetComboBox?.SelectedItem is not ComboBoxItem item ||
+            item.Tag is not string tag)
+        {
+            return;
+        }
+
+        string[] parts = tag.Split('|');
+        if (parts.Length != 2 ||
+            !int.TryParse(parts[0], out int minutes) ||
+            !int.TryParse(parts[1], out int increment))
+        {
+            return;
+        }
+
+        appSettings.ClockMinutes = minutes;
+        appSettings.ClockIncrementSeconds = increment;
+        clockIncrementSeconds = increment;
+        if (saveSettings)
+        {
+            settingsService.Save(appSettings);
+            ResetUiState();
+        }
+    }
+
+    private void AnimationCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        ApplyAnimationSetting(saveSettings: !isLoadingSettings);
+    }
+
+    private void ApplyAnimationSetting(bool saveSettings)
+    {
+        if (boardView is null || AnimationCheckBox is null)
+        {
+            return;
+        }
+
+        boardView.AnimationsEnabled = AnimationCheckBox.IsChecked == true;
+        if (saveSettings)
+        {
+            appSettings.AnimationsEnabled = boardView.AnimationsEnabled;
+            settingsService.Save(appSettings);
+        }
+    }
+
+    private void SoundCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (isLoadingSettings)
+        {
+            return;
+        }
+
+        appSettings.SoundsEnabled = SoundCheckBox.IsChecked == true;
+        settingsService.Save(appSettings);
+    }
+
+    private void ApplyClockIncrement(PieceColor movedColor)
+    {
+        if (clockIncrementSeconds <= 0)
+        {
+            return;
+        }
+
+        if (movedColor == PieceColor.White)
+        {
+            whiteTime = whiteTime.Add(TimeSpan.FromSeconds(clockIncrementSeconds));
+        }
+        else
+        {
+            blackTime = blackTime.Add(TimeSpan.FromSeconds(clockIncrementSeconds));
+        }
+
+        UpdateClockText();
+    }
+
+    private void ShowGameEndDialogIfNeeded()
+    {
+        if (!game.IsGameOver)
+        {
+            return;
+        }
+
+        PlayGameEndSound();
+        MessageBoxResult result = MessageBox.Show(
+            this,
+            StatusText.Text,
+            "Spiel beendet",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Information,
+            MessageBoxResult.No);
+        if (result == MessageBoxResult.Yes)
+        {
+            StartNewGame();
+        }
+    }
+
+    private bool IsAiSide(PieceColor color)
+    {
+        return GetSelectedComboBoxTag(GameModeComboBox) == "HumanVsAi" &&
+            GetSelectedAiDifficulty() is not null &&
+            GetSelectedComboBoxTag(AiSideComboBox) == (color == PieceColor.White ? "White" : "Black");
+    }
+
+    private static int GetAiDelay(AiDifficulty difficulty)
+    {
+        return difficulty switch
+        {
+            AiDifficulty.Easy => 180,
+            AiDifficulty.Medium => 260,
+            AiDifficulty.Hard => 380,
+            _ => 250
+        };
+    }
+
+    private void PlayMoveSound(MoveResult move)
+    {
+        if (appSettings.SoundsEnabled)
+        {
+            (move.CapturedPiece is null ? SystemSounds.Asterisk : SystemSounds.Exclamation).Play();
+        }
+    }
+
+    private void PlayGameEndSound()
+    {
+        if (appSettings.SoundsEnabled)
+        {
+            SystemSounds.Hand.Play();
+        }
+    }
+
+    private void SelectClockPreset(int minutes, int increment)
+    {
+        SelectComboBoxItemByTag(ClockPresetComboBox, $"{minutes}|{increment}");
+    }
+
+    private void RestoreWindowBounds()
+    {
+        if (appSettings.WindowWidth is > 0)
+        {
+            Width = appSettings.WindowWidth.Value;
+        }
+
+        if (appSettings.WindowHeight is > 0)
+        {
+            Height = appSettings.WindowHeight.Value;
+        }
+
+        if (appSettings.WindowLeft is not null)
+        {
+            Left = appSettings.WindowLeft.Value;
+        }
+
+        if (appSettings.WindowTop is not null)
+        {
+            Top = appSettings.WindowTop.Value;
+        }
+    }
+
+    private void SaveWindowBounds()
+    {
+        appSettings.WindowLeft = Left;
+        appSettings.WindowTop = Top;
+        appSettings.WindowWidth = Width;
+        appSettings.WindowHeight = Height;
+        settingsService.Save(appSettings);
+    }
+
+    private void NavigateHistory(int delta)
+    {
+        if (game.MoveHistory.Count == 0)
+        {
+            return;
+        }
+
+        if (analysisMoves.Count == 0)
+        {
+            analysisMoves = game.MoveHistory.ToList();
+            analysisIndex = analysisMoves.Count;
+        }
+
+        analysisIndex = Math.Clamp(analysisIndex + delta, 0, analysisMoves.Count);
+        IReadOnlyList<GameFileService.SavedMove> moves = analysisMoves
+            .Take(analysisIndex)
+            .Select(move => new GameFileService.SavedMove(move.From.ToAlgebraic(), move.To.ToAlgebraic()))
+            .ToList();
+
+        isReplaying = true;
+        gameFileService.ReplayMoves(game, moves);
+        ReloadGameFromModel($"Analysezug {analysisIndex}/{analysisMoves.Count}");
+        isReplaying = false;
+    }
+
+    private static int GetPieceValue(PieceType type)
+    {
+        return type switch
+        {
+            PieceType.Pawn => 100,
+            PieceType.Knight => 320,
+            PieceType.Bishop => 330,
+            PieceType.Rook => 500,
+            PieceType.Queen => 900,
+            PieceType.King => 20_000,
+            _ => 0
+        };
     }
 
     private static void SelectComboBoxItemByTag(ComboBox comboBox, string tag)
