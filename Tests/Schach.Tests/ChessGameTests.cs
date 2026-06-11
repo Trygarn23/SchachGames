@@ -238,6 +238,121 @@ public sealed class ChessGameTests
         Assert.Contains(move.To, game.GetLegalMoves(move.From));
     }
 
+    [Fact]
+    public void Ai_UsesOpeningBookInClassicStartPosition()
+    {
+        ChessGame game = new();
+
+        LegalMove? move = new ChessAi().SelectMove(game, AiDifficulty.Medium);
+
+        Assert.NotNull(move);
+        Assert.Contains($"{move.From.ToAlgebraic()}{move.To.ToAlgebraic()}", new[] { "e2e4", "d2d4", "g1f3", "c2c4" });
+    }
+
+    [Fact]
+    public void Chess960_StartPositionKeepsBackRanksSymmetric()
+    {
+        ChessGame game = new();
+
+        game.Reset(GameVariant.Chess960);
+
+        PieceType[] whiteBackRank = Enumerable.Range(0, 8)
+            .Select(column => game.GetPiece(new BoardPosition(7, column))!.Type)
+            .ToArray();
+        PieceType[] blackBackRank = Enumerable.Range(0, 8)
+            .Select(column => game.GetPiece(new BoardPosition(0, column))!.Type)
+            .ToArray();
+
+        Assert.Equal(whiteBackRank, blackBackRank);
+        int[] bishops = whiteBackRank
+            .Select((piece, column) => (piece, column))
+            .Where(item => item.piece == PieceType.Bishop)
+            .Select(item => item.column)
+            .ToArray();
+        Assert.NotEqual(bishops[0] % 2, bishops[1] % 2);
+
+        int king = Array.IndexOf(whiteBackRank, PieceType.King);
+        int[] rooks = whiteBackRank
+            .Select((piece, column) => (piece, column))
+            .Where(item => item.piece == PieceType.Rook)
+            .Select(item => item.column)
+            .Order()
+            .ToArray();
+        Assert.True(rooks[0] < king && king < rooks[1]);
+    }
+
+    [Fact]
+    public void KingOfTheHill_EndsWhenKingStartsOnCenter()
+    {
+        ChessGame game = new();
+
+        game.LoadFen("8/8/8/8/4K3/8/8/7k w - - 0 1", GameVariant.KingOfTheHill);
+
+        Assert.True(game.IsGameOver);
+        Assert.Equal(GameEndReason.KingOfTheHill, game.EndReason);
+        Assert.Equal(PieceColor.White, game.Winner);
+    }
+
+    [Fact]
+    public void GameFileService_PreservesVariantAndChess960StartingFen()
+    {
+        ChessGame game = new();
+        game.Reset(GameVariant.Chess960);
+        string startingFen = game.StartingFen;
+        LegalMove firstMove = game.GetLegalMovesForCurrentTurn().First();
+        Assert.True(game.TryMove(firstMove, out _));
+        string path = Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.schach");
+
+        try
+        {
+            GameFileService service = new();
+            service.Save(game, path);
+
+            ChessGame loaded = new();
+            service.Load(loaded, path);
+
+            Assert.Equal(GameVariant.Chess960, loaded.Variant);
+            Assert.Equal(startingFen, loaded.StartingFen);
+            Assert.Equal(game.ToFen(), loaded.ToFen());
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+    [Fact]
+    public void AnalysisVariation_CanContainSideLines()
+    {
+        ChessGame game = new();
+        Move(game, "e2", "e4");
+        MoveRecord move = game.MoveHistory.Single();
+
+        AnalysisVariation variation = new("Hauptvariante", [move], [new AnalysisVariation("Nebenvariante", [])]);
+
+        Assert.Single(variation.Moves);
+        Assert.Single(variation.Children);
+    }
+
+    [Fact]
+    public void PuzzleDefinition_StoresSolutionAndRating()
+    {
+        PuzzleDefinition puzzle = new(
+            "Matt in eins",
+            "7k/5Q2/6K1/8/8/8/8/8 w - - 0 1",
+            ["f7f8"],
+            PieceColor.White,
+            "Matt",
+            900);
+
+        Assert.Equal("Matt", puzzle.Theme);
+        Assert.Equal(900, puzzle.Rating);
+        Assert.Single(puzzle.SolutionMoves);
+    }
+
     private static void Move(ChessGame game, string from, string to)
     {
         Assert.True(game.TryMove(Pos(from), Pos(to)), $"{from}-{to} should be legal.");

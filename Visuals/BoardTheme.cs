@@ -50,13 +50,31 @@ public sealed class BoardTheme
             return CreateBrush(198, 176, 86);
         }
 
-        return Mode == BoardThemeMode.Light
-            ? GetLightThemeSquare(isLightSquare)
-            : GetDarkThemeSquare(isLightSquare);
+        return Mode switch
+        {
+            BoardThemeMode.Light => GetLightThemeSquare(isLightSquare),
+            BoardThemeMode.Wood => isLightSquare ? CreateBrush(222, 183, 118) : CreateBrush(130, 80, 42),
+            BoardThemeMode.Marble => isLightSquare ? CreateBrush(235, 237, 232) : CreateBrush(138, 151, 158),
+            BoardThemeMode.Neon => isLightSquare ? CreateBrush(37, 45, 59) : CreateBrush(31, 111, 124),
+            BoardThemeMode.Retro => isLightSquare ? CreateBrush(236, 203, 139) : CreateBrush(167, 88, 61),
+            BoardThemeMode.Minimal => isLightSquare ? CreateBrush(238, 238, 238) : CreateBrush(172, 172, 172),
+            BoardThemeMode.HighContrast => isLightSquare ? CreateBrush(255, 255, 255) : CreateBrush(20, 20, 20),
+            _ => GetDarkThemeSquare(isLightSquare)
+        };
     }
 
     public Brush GetPieceBrush(PieceColor color)
     {
+        if (Mode == BoardThemeMode.HighContrast)
+        {
+            return color == PieceColor.White ? CreateBrush(0, 0, 0) : CreateBrush(255, 220, 40);
+        }
+
+        if (Mode == BoardThemeMode.Neon)
+        {
+            return color == PieceColor.White ? CreateBrush(123, 245, 255) : CreateBrush(255, 92, 205);
+        }
+
         return color == PieceColor.White ? WhitePiece : BlackPiece;
     }
 

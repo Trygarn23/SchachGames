@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Shapes;
 using Schach.Logic;
 using Schach.Visuals;
 
@@ -19,11 +20,15 @@ public sealed class ChessBoardView : Grid
     private readonly TextBlock[] rankLabels = new TextBlock[BoardSize];
     private readonly TextBlock[] fileLabels = new TextBlock[BoardSize];
     private readonly Dictionary<BoardPosition, BoardMarkerColor> manualMarkers = [];
+    private readonly HashSet<(BoardPosition From, BoardPosition To)> manualArrows = [];
+    private readonly Canvas arrowCanvas = new() { IsHitTestVisible = false };
     private BoardPosition? selectedSquare;
     private IReadOnlyList<BoardPosition> selectedMoves = [];
     private BoardPosition? highlightedFrom;
     private BoardPosition? highlightedTo;
     private BoardPosition keyboardPosition = new(7, 4);
+    private Point dragStartPoint;
+    private BoardPosition? rightDragStart;
 
     public ChessBoardView(ChessGame game, BoardTheme theme)
     {
@@ -34,6 +39,7 @@ public sealed class ChessBoardView : Grid
         Height = 668;
         Focusable = true;
         KeyDown += ChessBoardView_KeyDown;
+        SizeChanged += (_, _) => RefreshArrows();
 
         BuildBoard();
         Refresh();
@@ -51,15 +57,16 @@ public sealed class ChessBoardView : Grid
 
     public bool IsFlipped { get; private set; }
 
-    public void StartNewGame()
+    public void StartNewGame(GameVariant variant = GameVariant.Classic)
     {
-        game.Reset();
+        game.Reset(variant);
         selectedSquare = null;
         selectedMoves = [];
         highlightedFrom = null;
         highlightedTo = null;
         keyboardPosition = new BoardPosition(7, 4);
         manualMarkers.Clear();
+        manualArrows.Clear();
         Refresh();
         StatusChanged?.Invoke(game.GetStatusText("Neues Spiel gestartet"));
     }
@@ -81,6 +88,7 @@ public sealed class ChessBoardView : Grid
         selectedSquare = null;
         selectedMoves = [];
         manualMarkers.Clear();
+        manualArrows.Clear();
         Refresh();
         StatusChanged?.Invoke(game.GetStatusText(message));
     }
@@ -151,6 +159,13 @@ public sealed class ChessBoardView : Grid
                 Children.Add(square);
             }
         }
+
+        SetRow(arrowCanvas, 0);
+        SetColumn(arrowCanvas, 1);
+        SetRowSpan(arrowCanvas, BoardSize);
+        SetColumnSpan(arrowCanvas, BoardSize);
+        Panel.SetZIndex(arrowCanvas, 10);
+        Children.Add(arrowCanvas);
     }
 
     private static TextBlock CreateCoordinateLabel()
@@ -175,16 +190,106 @@ public sealed class ChessBoardView : Grid
             FontSize = 42,
             FontWeight = FontWeights.SemiBold,
             Padding = new Thickness(0),
+            AllowDrop = true,
             Tag = position
         };
 
         square.Click += Square_Click;
+        square.Drop += Square_Drop;
+        square.MouseRightButtonDown += (_, _) => rightDragStart = position;
         square.MouseRightButtonUp += Square_MouseRightButtonUp;
+        square.PreviewMouseLeftButtonDown += (_, e) => dragStartPoint = e.GetPosition(this);
+        square.PreviewMouseMove += Square_PreviewMouseMove;
         square.MouseEnter += (_, _) => square.Opacity = 0.92;
         square.MouseLeave += (_, _) => square.Opacity = 1.0;
         square.GotKeyboardFocus += (_, _) => Refresh();
         square.LostKeyboardFocus += (_, _) => Refresh();
+        square.ContextMenu = CreateSquareContextMenu(position);
         return square;
+    }
+
+    private ContextMenu CreateSquareContextMenu(BoardPosition position)
+    {
+        ContextMenu menu = new();
+        MenuItem markItem = new() { Header = "Feld markieren" };
+        markItem.Click += (_, _) =>
+        {
+            CycleManualMarker(position);
+            Refresh();
+        };
+
+        MenuItem clearSquareItem = new() { Header = "Markierung entfernen" };
+        clearSquareItem.Click += (_, _) =>
+        {
+            manualMarkers.Remove(position);
+            manualArrows.RemoveWhere(arrow => arrow.From == position || arrow.To == position);
+            Refresh();
+        };
+
+        MenuItem clearAllItem = new() { Header = "Alle Markierungen entfernen" };
+        clearAllItem.Click += (_, _) =>
+        {
+            manualMarkers.Clear();
+            manualArrows.Clear();
+            Refresh();
+        };
+
+        MenuItem analysisItem = new() { Header = "Analyse fuer Feld starten" };
+        analysisItem.Click += (_, _) =>
+        {
+            selectedSquare = position;
+            selectedMoves = game.GetLegalMoves(position);
+            Refresh();
+            StatusChanged?.Invoke(game.GetStatusText($"Analyse fuer {position.ToAlgebraic()}"));
+        };
+
+        menu.Items.Add(markItem);
+        menu.Items.Add(clearSquareItem);
+        menu.Items.Add(clearAllItem);
+        menu.Items.Add(analysisItem);
+        return menu;
+    }
+
+    private void Square_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed ||
+            sender is not Button { Tag: BoardPosition from } square ||
+            InteractionLocked ||
+            game.IsGameOver)
+        {
+            return;
+        }
+
+        Point current = e.GetPosition(this);
+        if (Math.Abs(current.X - dragStartPoint.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(current.Y - dragStartPoint.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        ChessPiece? piece = game.GetPiece(from);
+        if (piece is null || piece.Color != game.CurrentTurn)
+        {
+            return;
+        }
+
+        DragDrop.DoDragDrop(square, from.ToAlgebraic(), DragDropEffects.Move);
+    }
+
+    private void Square_Drop(object sender, DragEventArgs e)
+    {
+        Focus();
+        if (sender is not Button { Tag: BoardPosition to } ||
+            e.Data.GetData(DataFormats.Text) is not string fromText ||
+            !BoardPosition.TryParse(fromText, out BoardPosition from))
+        {
+            return;
+        }
+
+        if (TryMoveFromTo(from, to))
+        {
+            e.Handled = true;
+        }
     }
 
     private void Square_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
@@ -192,14 +297,38 @@ public sealed class ChessBoardView : Grid
         Focus();
         e.Handled = true;
 
-        if (sender is not Button { Tag: BoardPosition position })
+        if (sender is not Button { Tag: BoardPosition position } square)
         {
+            return;
+        }
+
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            square.ContextMenu.IsOpen = true;
+            return;
+        }
+
+        if (rightDragStart is BoardPosition from && from != position)
+        {
+            ToggleManualArrow(from, position);
+            rightDragStart = null;
+            Refresh();
+            StatusChanged?.Invoke(game.GetStatusText($"{from.ToAlgebraic()} -> {position.ToAlgebraic()} markiert"));
             return;
         }
 
         CycleManualMarker(position);
         Refresh();
         StatusChanged?.Invoke(game.GetStatusText($"{position.ToAlgebraic()} markiert"));
+    }
+
+    private void ToggleManualArrow(BoardPosition from, BoardPosition to)
+    {
+        (BoardPosition From, BoardPosition To) arrow = (from, to);
+        if (!manualArrows.Add(arrow))
+        {
+            manualArrows.Remove(arrow);
+        }
     }
 
     private void CycleManualMarker(BoardPosition position)
@@ -228,9 +357,10 @@ public sealed class ChessBoardView : Grid
     private void Square_Click(object sender, RoutedEventArgs e)
     {
         Focus();
-        if (manualMarkers.Count > 0)
+        if (manualMarkers.Count > 0 || manualArrows.Count > 0)
         {
             manualMarkers.Clear();
+            manualArrows.Clear();
         }
 
         if (InteractionLocked)
@@ -260,18 +390,8 @@ public sealed class ChessBoardView : Grid
         }
 
         BoardPosition from = selectedSquare.Value;
-        IReadOnlyList<LegalMove> targetMoves = game.GetLegalMovesFrom(from)
-            .Where(move => move.To == clicked)
-            .ToList();
-        PieceType promotionType = PieceType.Queen;
-        if (targetMoves.Any(move => move.Kind == MoveKind.Promotion))
+        if (TryMoveFromTo(from, clicked))
         {
-            promotionType = PromotionRequested?.Invoke(game.CurrentTurn) ?? PieceType.Queen;
-        }
-
-        if (game.TryMove(from, clicked, promotionType, out MoveResult? result) && result is not null)
-        {
-            CompleteMove(result);
             return;
         }
 
@@ -285,6 +405,26 @@ public sealed class ChessBoardView : Grid
         selectedMoves = [];
         Refresh();
         StatusChanged?.Invoke("Ungueltiger Zug");
+    }
+
+    private bool TryMoveFromTo(BoardPosition from, BoardPosition to)
+    {
+        IReadOnlyList<LegalMove> targetMoves = game.GetLegalMovesFrom(from)
+            .Where(move => move.To == to)
+            .ToList();
+        PieceType promotionType = PieceType.Queen;
+        if (targetMoves.Any(move => move.Kind == MoveKind.Promotion))
+        {
+            promotionType = PromotionRequested?.Invoke(game.CurrentTurn) ?? PieceType.Queen;
+        }
+
+        if (!game.TryMove(from, to, promotionType, out MoveResult? result) || result is null)
+        {
+            return false;
+        }
+
+        CompleteMove(result);
+        return true;
     }
 
     private void CompleteMove(MoveResult result)
@@ -372,6 +512,8 @@ public sealed class ChessBoardView : Grid
                 ApplySquareBorder(square, position);
             }
         }
+
+        RefreshArrows();
     }
 
     private void ApplySquareBorder(Button square, BoardPosition position)
@@ -383,6 +525,13 @@ public sealed class ChessBoardView : Grid
             return;
         }
 
+        if (manualArrows.Any(arrow => arrow.From == position || arrow.To == position))
+        {
+            square.BorderBrush = theme.GetMarkerBrush(BoardMarkerColor.Blue);
+            square.BorderThickness = new Thickness(4);
+            return;
+        }
+
         if (square.IsKeyboardFocused)
         {
             square.BorderBrush = theme.GetFocusBrush();
@@ -391,6 +540,73 @@ public sealed class ChessBoardView : Grid
         }
 
         square.BorderThickness = new Thickness(0);
+    }
+
+    private void RefreshArrows()
+    {
+        arrowCanvas.Children.Clear();
+        double boardWidth = Math.Max(0, ActualWidth - CoordinateSize);
+        double boardHeight = Math.Max(0, ActualHeight - CoordinateSize);
+        double cellSize = Math.Min(boardWidth, boardHeight) / BoardSize;
+        if (cellSize <= 0)
+        {
+            return;
+        }
+
+        foreach ((BoardPosition from, BoardPosition to) in manualArrows)
+        {
+            Point start = GetCanvasCenter(from, cellSize);
+            Point end = GetCanvasCenter(to, cellSize);
+            Vector direction = end - start;
+            if (direction.Length <= 0)
+            {
+                continue;
+            }
+
+            direction.Normalize();
+            Point shortenedEnd = end - direction * (cellSize * 0.22);
+            Line line = new()
+            {
+                X1 = start.X,
+                Y1 = start.Y,
+                X2 = shortenedEnd.X,
+                Y2 = shortenedEnd.Y,
+                Stroke = theme.GetMarkerBrush(BoardMarkerColor.Blue),
+                StrokeThickness = 7,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                Opacity = 0.78
+            };
+
+            Polygon head = CreateArrowHead(shortenedEnd, direction, cellSize);
+            arrowCanvas.Children.Add(line);
+            arrowCanvas.Children.Add(head);
+        }
+    }
+
+    private Point GetCanvasCenter(BoardPosition position, double cellSize)
+    {
+        return new Point(
+            GetViewColumn(position) * cellSize + cellSize / 2,
+            GetViewRow(position) * cellSize + cellSize / 2);
+    }
+
+    private Polygon CreateArrowHead(Point tip, Vector direction, double cellSize)
+    {
+        Vector perpendicular = new(-direction.Y, direction.X);
+        double length = cellSize * 0.24;
+        double width = cellSize * 0.16;
+        return new Polygon
+        {
+            Fill = theme.GetMarkerBrush(BoardMarkerColor.Blue),
+            Opacity = 0.82,
+            Points =
+            {
+                tip,
+                tip - direction * length + perpendicular * width,
+                tip - direction * length - perpendicular * width
+            }
+        };
     }
 
     private void AnimateSquare(BoardPosition position, bool isCapture)

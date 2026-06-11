@@ -14,4 +14,8 @@
     <None Remove="Tests\**" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="AI\opening-book.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

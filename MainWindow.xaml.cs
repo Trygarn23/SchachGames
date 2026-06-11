@@ -35,6 +35,7 @@ public partial class MainWindow : Window
     private bool isAiThinking;
     private bool isLoadingSettings = true;
     private bool isReplaying;
+    private bool isSidebarCollapsed;
     private List<MoveRecord> analysisMoves = [];
     private int analysisIndex = -1;
 
@@ -56,8 +57,10 @@ public partial class MainWindow : Window
         appSettings = settingsService.Load();
         RestoreWindowBounds();
         SelectComboBoxItemByTag(GameModeComboBox, appSettings.GameMode);
+        SelectComboBoxItemByTag(GameVariantComboBox, appSettings.GameVariant);
         SelectComboBoxItemByTag(AiDifficultyComboBox, appSettings.AiDifficulty);
         SelectComboBoxItemByTag(AiSideComboBox, appSettings.AiSide);
+        SelectComboBoxItemByTag(AiPersonalityComboBox, appSettings.AiPersonality);
         SelectComboBoxItemByTag(BoardThemeComboBox, appSettings.BoardTheme);
         AnimationCheckBox.IsChecked = appSettings.AnimationsEnabled;
         SoundCheckBox.IsChecked = appSettings.SoundsEnabled;
@@ -88,6 +91,7 @@ public partial class MainWindow : Window
         MoveHistoryList.Items.Add(historyEntry);
         MoveHistoryList.ScrollIntoView(historyEntry);
         PlayMoveSound(move);
+        UpdateSideInfo(GetCoachMessage(move));
         if (game.IsGameOver)
         {
             UpdateStatus(game.GetStatusText(notation));
@@ -141,6 +145,7 @@ public partial class MainWindow : Window
         LastMoveText.Text = "Noch kein Zug";
         CapturedByWhiteText.Text = "-";
         CapturedByBlackText.Text = "-";
+        UpdateSideInfo();
         whiteTime = TimeSpan.FromMinutes(10);
         blackTime = TimeSpan.FromMinutes(appSettings.ClockMinutes);
         whiteTime = TimeSpan.FromMinutes(appSettings.ClockMinutes);
@@ -162,6 +167,13 @@ public partial class MainWindow : Window
 
     private void Window_KeyDown(object sender, KeyEventArgs e)
     {
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && e.Key == Key.K)
+        {
+            ShowCommandPalette();
+            e.Handled = true;
+            return;
+        }
+
         if (isAiThinking && e.Key != Key.N)
         {
             e.Handled = true;
@@ -222,6 +234,31 @@ public partial class MainWindow : Window
 
         appSettings.GameMode = GetSelectedComboBoxTag(GameModeComboBox) ?? "HumanVsAi";
         settingsService.Save(appSettings);
+        QueueAiMoveIfNeeded();
+    }
+
+    private void GameVariantComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (isLoadingSettings)
+        {
+            return;
+        }
+
+        appSettings.GameVariant = GetSelectedComboBoxTag(GameVariantComboBox) ?? GameVariant.Classic.ToString();
+        settingsService.Save(appSettings);
+        StartNewGame();
+    }
+
+    private void AiPersonalityComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (isLoadingSettings)
+        {
+            return;
+        }
+
+        appSettings.AiPersonality = GetSelectedComboBoxTag(AiPersonalityComboBox) ?? AiPersonality.Balanced.ToString();
+        settingsService.Save(appSettings);
+        UpdateSideInfo();
         QueueAiMoveIfNeeded();
     }
 
@@ -463,6 +500,133 @@ public partial class MainWindow : Window
         ShowGameEndDialogIfNeeded();
     }
 
+    private void HelpMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        MessageBox.Show(
+            this,
+            "Bedienung:\n" +
+            "- Klick: Figur auswaehlen und ziehen.\n" +
+            "- Drag-and-drop: Figur direkt ziehen.\n" +
+            "- Rechtsklick: Feldmarkierung wechseln.\n" +
+            "- N: neues Spiel, F: Brett drehen, Esc: Auswahl aufheben.\n\n" +
+            "Fun Modes:\n" +
+            "- Chess960: zufaellige Grundstellung mit Laeufern auf unterschiedlichen Farben.\n" +
+            "- King of the Hill: Koenig gewinnt auf d4/e4/d5/e5.\n" +
+            "- Drei-Schach: Das dritte gegebene Schach gewinnt.",
+            "Kurzhilfe",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
+    private void BestMoveButton_Click(object sender, RoutedEventArgs e)
+    {
+        AiDifficulty difficulty = GetSelectedAiDifficulty() ?? AiDifficulty.Hard;
+        IReadOnlyList<string> candidates = chessAi.GetCandidateSummaries(game, difficulty, GetSelectedAiPersonality(), maxCount: 3);
+        AiCandidatesText.Text = candidates.Count == 0
+            ? "Keine legalen Kandidaten."
+            : string.Join("\n", candidates);
+    }
+
+    private void QuickStartButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string tag })
+        {
+            return;
+        }
+
+        isLoadingSettings = true;
+        switch (tag)
+        {
+            case "Blitz":
+                SelectComboBoxItemByTag(GameVariantComboBox, GameVariant.Classic.ToString());
+                SelectComboBoxItemByTag(ClockPresetComboBox, "3|2");
+                SelectComboBoxItemByTag(GameModeComboBox, "HumanVsAi");
+                break;
+            case "Fun":
+                SelectComboBoxItemByTag(GameVariantComboBox, GameVariant.Chess960.ToString());
+                SelectComboBoxItemByTag(GameModeComboBox, "HumanVsAi");
+                break;
+            case "Analysis":
+                SelectComboBoxItemByTag(GameVariantComboBox, GameVariant.Classic.ToString());
+                SelectComboBoxItemByTag(GameModeComboBox, "HumanVsHuman");
+                SelectComboBoxItemByTag(AiDifficultyComboBox, "Off");
+                break;
+            default:
+                SelectComboBoxItemByTag(GameVariantComboBox, GameVariant.Classic.ToString());
+                SelectComboBoxItemByTag(GameModeComboBox, "HumanVsAi");
+                break;
+        }
+        isLoadingSettings = false;
+
+        ApplyClockPreset(saveSettings: true);
+        appSettings.GameMode = GetSelectedComboBoxTag(GameModeComboBox) ?? appSettings.GameMode;
+        appSettings.GameVariant = GetSelectedComboBoxTag(GameVariantComboBox) ?? appSettings.GameVariant;
+        settingsService.Save(appSettings);
+        StartNewGame();
+    }
+
+    private void CommandPaletteMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        ShowCommandPalette();
+    }
+
+    private void ToggleSidebarMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleSidebar();
+    }
+
+    private void ShowCommandPalette()
+    {
+        Window dialog = new()
+        {
+            Title = "Command Palette",
+            Owner = this,
+            Width = 360,
+            Height = 340,
+            ResizeMode = ResizeMode.NoResize,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner
+        };
+
+        StackPanel panel = new() { Margin = new Thickness(16) };
+        panel.Children.Add(new TextBlock
+        {
+            Text = "Aktion waehlen",
+            FontSize = 18,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 0, 0, 12)
+        });
+
+        AddCommandButton(panel, "Neues Spiel", StartNewGame);
+        AddCommandButton(panel, "Bester Zug", () => BestMoveButton_Click(this, new RoutedEventArgs()));
+        AddCommandButton(panel, "Brett drehen", () => FlipBoardCheckBox.IsChecked = FlipBoardCheckBox.IsChecked != true);
+        AddCommandButton(panel, "Sidebar umschalten", ToggleSidebar);
+        AddCommandButton(panel, "Uhr pausieren/fortsetzen", () => PauseClockMenuItem_Click(this, new RoutedEventArgs()));
+        AddCommandButton(panel, "Kurzhilfe", () => HelpMenuItem_Click(this, new RoutedEventArgs()));
+
+        dialog.Content = panel;
+        dialog.ShowDialog();
+    }
+
+    private static void AddCommandButton(Panel panel, string label, Action action)
+    {
+        Button button = new()
+        {
+            Content = label,
+            Height = 32,
+            Margin = new Thickness(0, 0, 0, 8)
+        };
+        button.Click += (_, _) => action();
+        panel.Children.Add(button);
+    }
+
+    private void ToggleSidebar()
+    {
+        isSidebarCollapsed = !isSidebarCollapsed;
+        SidebarPanel.Visibility = isSidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
+        SideColumn.Width = isSidebarCollapsed ? new GridLength(0) : new GridLength(320);
+        SideColumn.MinWidth = isSidebarCollapsed ? 0 : 320;
+    }
+
     private void PauseClockMenuItem_Click(object sender, RoutedEventArgs e)
     {
         isClockPaused = !isClockPaused;
@@ -475,6 +639,16 @@ public partial class MainWindow : Window
     }
 
     private void NextMoveMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        NavigateHistory(1);
+    }
+
+    private void PreviousMoveButton_Click(object sender, RoutedEventArgs e)
+    {
+        NavigateHistory(-1);
+    }
+
+    private void NextMoveButton_Click(object sender, RoutedEventArgs e)
     {
         NavigateHistory(1);
     }
@@ -505,7 +679,7 @@ public partial class MainWindow : Window
                 return;
             }
 
-            LegalMove? aiMove = chessAi.SelectMove(game, difficulty.Value);
+            LegalMove? aiMove = chessAi.SelectMove(game, difficulty.Value, GetSelectedAiPersonality());
             if (aiMove is null)
             {
                 UpdateStatus("KI hat keinen Zug");
@@ -544,7 +718,8 @@ public partial class MainWindow : Window
         analysisMoves.Clear();
         isClockPaused = false;
         ResetUiState();
-        boardView.StartNewGame();
+        boardView.StartNewGame(GetSelectedGameVariant());
+        UpdateStatus(game.GetStatusText(GetVariantStartMessage(game.Variant)));
         QueueAiMoveIfNeeded();
     }
 
@@ -552,6 +727,9 @@ public partial class MainWindow : Window
     {
         aiGeneration++;
         ResetUiState();
+        isLoadingSettings = true;
+        SelectComboBoxItemByTag(GameVariantComboBox, game.Variant.ToString());
+        isLoadingSettings = false;
         RebuildMoveUiFromHistory();
         boardView.ReloadFromGame(message);
         if (!isReplaying)
@@ -580,6 +758,8 @@ public partial class MainWindow : Window
         {
             MoveHistoryList.ScrollIntoView(MoveHistoryList.Items[^1]);
         }
+
+        UpdateSideInfo();
     }
 
     private void MoveHistoryList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -836,9 +1016,101 @@ public partial class MainWindow : Window
             .ToList();
 
         isReplaying = true;
-        gameFileService.ReplayMoves(game, moves);
+        gameFileService.ReplayMoves(game, moves, game.Variant);
         ReloadGameFromModel($"Analysezug {analysisIndex}/{analysisMoves.Count}");
         isReplaying = false;
+    }
+
+    private void UpdateSideInfo(string? coachMessage = null)
+    {
+        int balance = GetMaterialBalanceForWhite();
+        MaterialBalanceText.Text = balance switch
+        {
+            > 0 => $"+{balance} fuer Weiss",
+            < 0 => $"{balance} fuer Schwarz",
+            _ => "Ausgeglichen"
+        };
+
+        EvaluationText.Text = $"Bewertung: {balance:+#;-#;0}";
+        EvaluationBar.Value = Math.Clamp(50 + balance * 4, 0, 100);
+
+        AiDifficulty difficulty = GetSelectedAiDifficulty() ?? AiDifficulty.Medium;
+        IReadOnlyList<string> candidates = chessAi.GetCandidateSummaries(game, difficulty, GetSelectedAiPersonality(), maxCount: 3);
+        AiCandidatesText.Text = candidates.Count == 0
+            ? "Noch keine Kandidaten."
+            : string.Join("\n", candidates);
+
+        if (!string.IsNullOrWhiteSpace(coachMessage))
+        {
+            CoachText.Text = coachMessage;
+        }
+    }
+
+    private int GetMaterialBalanceForWhite()
+    {
+        int balance = 0;
+        for (int row = 0; row < 8; row++)
+        {
+            for (int column = 0; column < 8; column++)
+            {
+                ChessPiece? piece = game.GetPiece(new BoardPosition(row, column));
+                if (piece is null || piece.Type == PieceType.King)
+                {
+                    continue;
+                }
+
+                int value = GetPieceValue(piece.Type) / 100;
+                balance += piece.Color == PieceColor.White ? value : -value;
+            }
+        }
+
+        return balance;
+    }
+
+    private static string GetCoachMessage(MoveResult move)
+    {
+        if (move.Kind == MoveKind.Promotion)
+        {
+            return "Coach: Umwandlung erreicht. Das ist fast immer ein entscheidender Vorteil.";
+        }
+
+        if (move.CapturedPiece is not null)
+        {
+            return $"Coach: Schlagzug gesehen. Materialwert {GetPieceValue(move.CapturedPiece.Type) / 100}.";
+        }
+
+        if (move.Kind is MoveKind.CastlingKingSide or MoveKind.CastlingQueenSide)
+        {
+            return "Coach: Rochade bringt den Koenig meist sicherer ins Spiel.";
+        }
+
+        return "Coach: Pruefe nach jedem Zug, welche gegnerischen Schachs und Schlagzuege entstehen.";
+    }
+
+    private GameVariant GetSelectedGameVariant()
+    {
+        string tag = GetSelectedComboBoxTag(GameVariantComboBox) ?? GameVariant.Classic.ToString();
+        return Enum.TryParse(tag, out GameVariant variant) ? variant : GameVariant.Classic;
+    }
+
+    private AiPersonality GetSelectedAiPersonality()
+    {
+        string tag = GetSelectedComboBoxTag(AiPersonalityComboBox) ?? AiPersonality.Balanced.ToString();
+        return Enum.TryParse(tag, out AiPersonality personality) ? personality : AiPersonality.Balanced;
+    }
+
+    private static string GetVariantStartMessage(GameVariant variant)
+    {
+        return variant switch
+        {
+            GameVariant.Chess960 => "Chess960 gestartet",
+            GameVariant.PawnsWar => "Bauernkrieg gestartet",
+            GameVariant.KnightsDuel => "Springerduell gestartet",
+            GameVariant.KingOfTheHill => "King of the Hill gestartet",
+            GameVariant.ThreeCheck => "Drei-Schach gestartet",
+            GameVariant.NoQueens => "Ohne-Damen-Modus gestartet",
+            _ => "Neues Spiel gestartet"
+        };
     }
 
     private static int GetPieceValue(PieceType type)

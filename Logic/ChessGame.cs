@@ -2,6 +2,8 @@ namespace Schach.Logic;
 
 public sealed class ChessGame
 {
+    private static readonly Random VariantRandom = new();
+
     private static readonly (int Row, int Column)[] KnightOffsets =
     [
         (-2, -1), (-2, 1), (-1, -2), (-1, 2),
@@ -44,6 +46,15 @@ public sealed class ChessGame
     private bool whiteKingMoved;
     private bool whiteKingSideRookMoved;
     private bool whiteQueenSideRookMoved;
+    private string startingFen = string.Empty;
+    private int blackKingSideRookStartColumn = 7;
+    private int blackKingStartColumn = 4;
+    private int blackQueenSideRookStartColumn = 0;
+    private int blackThreeCheckCount;
+    private int whiteKingSideRookStartColumn = 7;
+    private int whiteKingStartColumn = 4;
+    private int whiteQueenSideRookStartColumn = 0;
+    private int whiteThreeCheckCount;
 
     public ChessGame()
     {
@@ -64,11 +75,20 @@ public sealed class ChessGame
 
     public int HalfMoveClock => halfMoveClock;
 
-    public void Reset()
+    public GameVariant Variant { get; private set; } = GameVariant.Classic;
+
+    public string StartingFen => startingFen;
+
+    public int WhiteChecksDelivered => whiteThreeCheckCount;
+
+    public int BlackChecksDelivered => blackThreeCheckCount;
+
+    public void Reset(GameVariant variant = GameVariant.Classic)
     {
         Array.Clear(board);
         moveHistory.Clear();
         positionOccurrences.Clear();
+        Variant = variant;
         CurrentTurn = PieceColor.White;
         IsGameOver = false;
         EndReason = GameEndReason.None;
@@ -76,17 +96,23 @@ public sealed class ChessGame
         enPassantTarget = null;
         fullMoveNumber = 1;
         halfMoveClock = 0;
+        whiteThreeCheckCount = 0;
+        blackThreeCheckCount = 0;
         whiteKingMoved = false;
         blackKingMoved = false;
         whiteKingSideRookMoved = false;
         whiteQueenSideRookMoved = false;
         blackKingSideRookMoved = false;
         blackQueenSideRookMoved = false;
+        whiteKingStartColumn = 4;
+        blackKingStartColumn = 4;
+        whiteKingSideRookStartColumn = 7;
+        whiteQueenSideRookStartColumn = 0;
+        blackKingSideRookStartColumn = 7;
+        blackQueenSideRookStartColumn = 0;
 
-        PlaceBackRank(0, PieceColor.Black);
-        PlacePawns(1, PieceColor.Black);
-        PlacePawns(6, PieceColor.White);
-        PlaceBackRank(7, PieceColor.White);
+        SetupStartPosition(variant);
+        startingFen = ToFen();
         RecordCurrentPosition();
     }
 
@@ -196,7 +222,7 @@ public sealed class ChessGame
         return $"{boardPart} {activeColor} {castling} {enPassant} {halfMoveClock} {fullMoveNumber}";
     }
 
-    public void LoadFen(string fen)
+    public void LoadFen(string fen, GameVariant variant = GameVariant.Classic)
     {
         string[] parts = fen.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length < 4)
@@ -207,6 +233,15 @@ public sealed class ChessGame
         Array.Clear(board);
         moveHistory.Clear();
         positionOccurrences.Clear();
+        Variant = variant;
+        whiteThreeCheckCount = 0;
+        blackThreeCheckCount = 0;
+        whiteKingStartColumn = 4;
+        blackKingStartColumn = 4;
+        whiteKingSideRookStartColumn = 7;
+        whiteQueenSideRookStartColumn = 0;
+        blackKingSideRookStartColumn = 7;
+        blackQueenSideRookStartColumn = 0;
 
         string[] ranks = parts[0].Split('/');
         if (ranks.Length != 8)
@@ -247,6 +282,7 @@ public sealed class ChessGame
             _ => throw new InvalidOperationException("FEN-Zugfarbe muss w oder b sein.")
         };
 
+        InferCastlingStartColumnsFromBoard();
         SetCastlingRightsFromFen(parts[2]);
         enPassantTarget = parts[3] == "-"
             ? null
@@ -258,6 +294,7 @@ public sealed class ChessGame
         IsGameOver = false;
         EndReason = GameEndReason.None;
         Winner = null;
+        startingFen = ToFen();
         RecordCurrentPosition();
         UpdateGameState();
     }
@@ -276,14 +313,19 @@ public sealed class ChessGame
                 GameEndReason.Resignation => $"{prefix}\n{GetColorName(Winner!.Value)} gewinnt durch Aufgabe.",
                 GameEndReason.DrawAgreement => $"{prefix}\nRemis durch Einigung.",
                 GameEndReason.Timeout => $"{prefix}\n{GetColorName(Winner!.Value)} gewinnt auf Zeit.",
+                GameEndReason.ThreeCheck => $"{prefix}\n{GetColorName(Winner!.Value)} gewinnt im Drei-Schach-Modus.",
+                GameEndReason.KingOfTheHill => $"{prefix}\n{GetColorName(Winner!.Value)} gewinnt durch King of the Hill.",
                 _ => prefix
             };
         }
 
         string turn = GetColorName(CurrentTurn);
-        return IsInCheck(CurrentTurn)
+        string status = IsInCheck(CurrentTurn)
             ? $"{prefix}\nSchach gegen {turn}. {turn} muss den Koenig schuetzen."
             : $"{prefix}\n{turn} am Zug";
+        return Variant == GameVariant.ThreeCheck
+            ? $"{status}\nDrei-Schach: Weiss {whiteThreeCheckCount}/3, Schwarz {blackThreeCheckCount}/3"
+            : status;
     }
 
     public ChessGame Clone()
@@ -318,6 +360,16 @@ public sealed class ChessGame
         clone.whiteQueenSideRookMoved = whiteQueenSideRookMoved;
         clone.blackKingSideRookMoved = blackKingSideRookMoved;
         clone.blackQueenSideRookMoved = blackQueenSideRookMoved;
+        clone.whiteKingStartColumn = whiteKingStartColumn;
+        clone.blackKingStartColumn = blackKingStartColumn;
+        clone.whiteKingSideRookStartColumn = whiteKingSideRookStartColumn;
+        clone.whiteQueenSideRookStartColumn = whiteQueenSideRookStartColumn;
+        clone.blackKingSideRookStartColumn = blackKingSideRookStartColumn;
+        clone.blackQueenSideRookStartColumn = blackQueenSideRookStartColumn;
+        clone.whiteThreeCheckCount = whiteThreeCheckCount;
+        clone.blackThreeCheckCount = blackThreeCheckCount;
+        clone.Variant = Variant;
+        clone.startingFen = startingFen;
         clone.moveHistory.AddRange(moveHistory);
         foreach ((string key, int count) in positionOccurrences)
         {
@@ -394,22 +446,28 @@ public sealed class ChessGame
         ChessPiece? capturedPiece = move.CapturedPiece;
         BoardPosition capturedPosition = move.CapturedPosition ?? move.To;
 
-        board[move.From.Row, move.From.Column] = null;
-        if (move.Kind == MoveKind.EnPassant)
-        {
-            board[capturedPosition.Row, capturedPosition.Column] = null;
-        }
-
-        ChessPiece pieceToPlace = move.Kind == MoveKind.Promotion
-            ? new ChessPiece(move.PromotionType ?? PieceType.Queen, movedPiece.Color)
-            : movedPiece;
-
-        board[move.To.Row, move.To.Column] = pieceToPlace;
-
         if (move.Kind is MoveKind.CastlingKingSide or MoveKind.CastlingQueenSide)
         {
-            MoveCastlingRook(move);
+            ApplyCastlingToBoard(move, movedPiece);
         }
+        else
+        {
+            board[move.From.Row, move.From.Column] = null;
+            if (move.Kind == MoveKind.EnPassant)
+            {
+                board[capturedPosition.Row, capturedPosition.Column] = null;
+            }
+
+            ChessPiece pieceToPlace = move.Kind == MoveKind.Promotion
+                ? new ChessPiece(move.PromotionType ?? PieceType.Queen, movedPiece.Color)
+                : movedPiece;
+
+            board[move.To.Row, move.To.Column] = pieceToPlace;
+        }
+
+        ChessPiece pieceToPlaceForRecord = move.Kind == MoveKind.Promotion
+            ? new ChessPiece(move.PromotionType ?? PieceType.Queen, movedPiece.Color)
+            : movedPiece;
 
         UpdateCastlingRights(move);
         halfMoveClock = movedPiece.Type == PieceType.Pawn || capturedPiece is not null
@@ -422,7 +480,7 @@ public sealed class ChessGame
             moveNumber,
             move.From,
             move.To,
-            pieceToPlace,
+            pieceToPlaceForRecord,
             capturedPiece,
             move.Kind,
             move.PromotionType);
@@ -435,7 +493,7 @@ public sealed class ChessGame
             move.To,
             notation,
             move.Kind,
-            pieceToPlace,
+            pieceToPlaceForRecord,
             capturedPiece));
 
         if (movedPiece.Color == PieceColor.Black)
@@ -444,6 +502,11 @@ public sealed class ChessGame
         }
 
         CurrentTurn = Opposite(CurrentTurn);
+        if (IsInCheck(CurrentTurn))
+        {
+            RegisterDeliveredCheck(movedPiece.Color);
+        }
+
         RecordCurrentPosition();
         UpdateGameState();
         return result with { };
@@ -503,6 +566,11 @@ public sealed class ChessGame
 
     private void UpdateGameState()
     {
+        if (TryApplyVariantEndState())
+        {
+            return;
+        }
+
         if (halfMoveClock >= 100)
         {
             IsGameOver = true;
@@ -549,6 +617,45 @@ public sealed class ChessGame
         }
     }
 
+    private bool TryApplyVariantEndState()
+    {
+        if (Variant == GameVariant.ThreeCheck)
+        {
+            if (whiteThreeCheckCount >= 3)
+            {
+                IsGameOver = true;
+                EndReason = GameEndReason.ThreeCheck;
+                Winner = PieceColor.White;
+                return true;
+            }
+
+            if (blackThreeCheckCount >= 3)
+            {
+                IsGameOver = true;
+                EndReason = GameEndReason.ThreeCheck;
+                Winner = PieceColor.Black;
+                return true;
+            }
+        }
+
+        if (Variant == GameVariant.KingOfTheHill)
+        {
+            foreach (PieceColor color in new[] { PieceColor.White, PieceColor.Black })
+            {
+                BoardPosition? kingPosition = FindKing(color);
+                if (kingPosition is { Row: >= 3 and <= 4, Column: >= 3 and <= 4 })
+                {
+                    IsGameOver = true;
+                    EndReason = GameEndReason.KingOfTheHill;
+                    Winner = color;
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     private IEnumerable<LegalMove> GetPseudoMoves(BoardPosition from, ChessPiece piece)
     {
         return piece.Type switch
@@ -589,6 +696,125 @@ public sealed class ChessGame
         {
             board[row, column] = new ChessPiece(PieceType.Pawn, color);
         }
+    }
+
+    private void SetupStartPosition(GameVariant variant)
+    {
+        switch (variant)
+        {
+            case GameVariant.Chess960:
+                PieceType[] chess960BackRank = GenerateChess960BackRank();
+                PlaceChess960BackRank(0, PieceColor.Black, chess960BackRank);
+                PlacePawns(1, PieceColor.Black);
+                PlacePawns(6, PieceColor.White);
+                PlaceChess960BackRank(7, PieceColor.White, chess960BackRank);
+                break;
+            case GameVariant.PawnsWar:
+                PlacePawns(1, PieceColor.Black);
+                PlacePawns(6, PieceColor.White);
+                board[0, 4] = new ChessPiece(PieceType.King, PieceColor.Black);
+                board[7, 4] = new ChessPiece(PieceType.King, PieceColor.White);
+                blackKingSideRookMoved = true;
+                blackQueenSideRookMoved = true;
+                whiteKingSideRookMoved = true;
+                whiteQueenSideRookMoved = true;
+                break;
+            case GameVariant.KnightsDuel:
+                board[0, 4] = new ChessPiece(PieceType.King, PieceColor.Black);
+                board[0, 1] = new ChessPiece(PieceType.Knight, PieceColor.Black);
+                board[0, 6] = new ChessPiece(PieceType.Knight, PieceColor.Black);
+                board[7, 4] = new ChessPiece(PieceType.King, PieceColor.White);
+                board[7, 1] = new ChessPiece(PieceType.Knight, PieceColor.White);
+                board[7, 6] = new ChessPiece(PieceType.Knight, PieceColor.White);
+                blackKingSideRookMoved = true;
+                blackQueenSideRookMoved = true;
+                whiteKingSideRookMoved = true;
+                whiteQueenSideRookMoved = true;
+                break;
+            case GameVariant.NoQueens:
+                PlaceBackRank(0, PieceColor.Black);
+                PlacePawns(1, PieceColor.Black);
+                PlacePawns(6, PieceColor.White);
+                PlaceBackRank(7, PieceColor.White);
+                board[0, 3] = null;
+                board[7, 3] = null;
+                break;
+            default:
+                PlaceBackRank(0, PieceColor.Black);
+                PlacePawns(1, PieceColor.Black);
+                PlacePawns(6, PieceColor.White);
+                PlaceBackRank(7, PieceColor.White);
+                break;
+        }
+    }
+
+    private void PlaceChess960BackRank(int row, PieceColor color, PieceType[] pieces)
+    {
+        for (int column = 0; column < 8; column++)
+        {
+            board[row, column] = new ChessPiece(pieces[column], color);
+        }
+
+        int kingColumn = Array.IndexOf(pieces, PieceType.King);
+        int[] rookColumns = pieces
+            .Select((piece, column) => (piece, column))
+            .Where(item => item.piece == PieceType.Rook)
+            .Select(item => item.column)
+            .Order()
+            .ToArray();
+
+        if (color == PieceColor.White)
+        {
+            whiteKingStartColumn = kingColumn;
+            whiteQueenSideRookStartColumn = rookColumns[0];
+            whiteKingSideRookStartColumn = rookColumns[1];
+        }
+        else
+        {
+            blackKingStartColumn = kingColumn;
+            blackQueenSideRookStartColumn = rookColumns[0];
+            blackKingSideRookStartColumn = rookColumns[1];
+        }
+    }
+
+    private static PieceType[] GenerateChess960BackRank()
+    {
+        PieceType?[] pieces = new PieceType?[8];
+        int firstBishop = VariantRandom.Next(0, 4) * 2;
+        int secondBishop = VariantRandom.Next(0, 4) * 2 + 1;
+        pieces[firstBishop] = PieceType.Bishop;
+        pieces[secondBishop] = PieceType.Bishop;
+
+        int queenColumn = PickEmptyColumn(pieces);
+        pieces[queenColumn] = PieceType.Queen;
+
+        int firstKnight = PickEmptyColumn(pieces);
+        pieces[firstKnight] = PieceType.Knight;
+        int secondKnight = PickEmptyColumn(pieces);
+        pieces[secondKnight] = PieceType.Knight;
+
+        int[] remaining = pieces
+            .Select((piece, column) => (piece, column))
+            .Where(item => item.piece is null)
+            .Select(item => item.column)
+            .Order()
+            .ToArray();
+
+        pieces[remaining[0]] = PieceType.Rook;
+        pieces[remaining[1]] = PieceType.King;
+        pieces[remaining[2]] = PieceType.Rook;
+        return pieces.Select(piece => piece!.Value).ToArray();
+    }
+
+    private static int PickEmptyColumn(PieceType?[] pieces)
+    {
+        int[] emptyColumns = pieces
+            .Select((piece, column) => (piece, column))
+            .Where(item => item.piece is null)
+            .Select(item => item.column)
+            .ToArray();
+
+        return emptyColumns[VariantRandom.Next(emptyColumns.Length)];
     }
 
     private IReadOnlyList<LegalMove> GetPawnMoves(BoardPosition from, PieceColor color)
@@ -733,7 +959,7 @@ public sealed class ChessGame
     {
         ChessPiece piece = GetPiece(from)!;
         int row = color == PieceColor.White ? 7 : 0;
-        if (from != new BoardPosition(row, 4))
+        if (from != new BoardPosition(row, GetKingStartColumn(color)))
         {
             return;
         }
@@ -757,36 +983,63 @@ public sealed class ChessGame
             return false;
         }
 
-        int rookColumn = kingside ? 7 : 0;
+        int kingStartColumn = GetKingStartColumn(color);
+        int kingTargetColumn = kingside ? 6 : 2;
+        int rookColumn = GetRookStartColumn(color, kingside);
+        int rookTargetColumn = kingside ? 5 : 3;
         ChessPiece? rook = GetPiece(new BoardPosition(row, rookColumn));
         if (rook is not { Type: PieceType.Rook } || rook.Color != color)
         {
             return false;
         }
 
-        int[] emptyColumns = kingside ? [5, 6] : [1, 2, 3];
-        if (emptyColumns.Any(column => GetPiece(new BoardPosition(row, column)) is not null))
+        int firstBetween = Math.Min(kingStartColumn, rookColumn) + 1;
+        int lastBetween = Math.Max(kingStartColumn, rookColumn) - 1;
+        for (int column = firstBetween; column <= lastBetween; column++)
         {
+            if (GetPiece(new BoardPosition(row, column)) is not null)
+            {
+                return false;
+            }
+        }
+
+        foreach (int column in new[] { kingTargetColumn, rookTargetColumn })
+        {
+            if (column != kingStartColumn &&
+                column != rookColumn &&
+                GetPiece(new BoardPosition(row, column)) is not null)
+            {
+                return false;
+            }
+        }
+
+        int firstKingColumn = Math.Min(kingStartColumn, kingTargetColumn);
+        int lastKingColumn = Math.Max(kingStartColumn, kingTargetColumn);
+        for (int column = firstKingColumn; column <= lastKingColumn; column++)
+        {
+            if (!IsSquareAttacked(new BoardPosition(row, column), Opposite(color)))
+            {
+                continue;
+            }
+
             return false;
         }
 
-        int[] safeColumns = kingside ? [5, 6] : [3, 2];
-        return safeColumns.All(column => !IsSquareAttacked(new BoardPosition(row, column), Opposite(color)));
+        return true;
     }
 
-    private void MoveCastlingRook(LegalMove move)
+    private void ApplyCastlingToBoard(LegalMove move, ChessPiece kingPiece)
     {
         int row = move.MovedPiece.Color == PieceColor.White ? 7 : 0;
-        if (move.Kind == MoveKind.CastlingKingSide)
-        {
-            board[row, 5] = board[row, 7];
-            board[row, 7] = null;
-        }
-        else
-        {
-            board[row, 3] = board[row, 0];
-            board[row, 0] = null;
-        }
+        bool kingside = move.Kind == MoveKind.CastlingKingSide;
+        int rookSourceColumn = GetRookStartColumn(move.MovedPiece.Color, kingside);
+        int rookTargetColumn = kingside ? 5 : 3;
+        ChessPiece? rookPiece = board[row, rookSourceColumn];
+
+        board[row, move.From.Column] = null;
+        board[row, rookSourceColumn] = null;
+        board[row, move.To.Column] = kingPiece;
+        board[row, rookTargetColumn] = rookPiece;
     }
 
     private BoardPosition? GetNewEnPassantTarget(LegalMove move)
@@ -828,19 +1081,19 @@ public sealed class ChessGame
             return;
         }
 
-        if (position == new BoardPosition(7, 0))
+        if (position == new BoardPosition(7, whiteQueenSideRookStartColumn))
         {
             whiteQueenSideRookMoved = true;
         }
-        else if (position == new BoardPosition(7, 7))
+        else if (position == new BoardPosition(7, whiteKingSideRookStartColumn))
         {
             whiteKingSideRookMoved = true;
         }
-        else if (position == new BoardPosition(0, 0))
+        else if (position == new BoardPosition(0, blackQueenSideRookStartColumn))
         {
             blackQueenSideRookMoved = true;
         }
-        else if (position == new BoardPosition(0, 7))
+        else if (position == new BoardPosition(0, blackKingSideRookStartColumn))
         {
             blackKingSideRookMoved = true;
         }
@@ -854,14 +1107,31 @@ public sealed class ChessGame
 
     private bool WouldLeaveKingInCheck(LegalMove move)
     {
+        if (move.Kind is MoveKind.CastlingKingSide or MoveKind.CastlingQueenSide)
+        {
+            int row = move.MovedPiece.Color == PieceColor.White ? 7 : 0;
+            bool kingside = move.Kind == MoveKind.CastlingKingSide;
+            BoardPosition rookSource = new(row, GetRookStartColumn(move.MovedPiece.Color, kingside));
+            BoardPosition rookTarget = new(row, kingside ? 5 : 3);
+            BoardPosition[] snapshotPositions = [move.From, move.To, rookSource, rookTarget];
+            Dictionary<BoardPosition, ChessPiece?> snapshot = snapshotPositions
+                .Distinct()
+                .ToDictionary(position => position, position => board[position.Row, position.Column]);
+
+            ApplyCastlingToBoard(move, move.MovedPiece);
+            bool isCastlingCheck = IsInCheck(move.MovedPiece.Color);
+            foreach ((BoardPosition position, ChessPiece? piece) in snapshot)
+            {
+                board[position.Row, position.Column] = piece;
+            }
+
+            return isCastlingCheck;
+        }
+
         ChessPiece? sourcePiece = board[move.From.Row, move.From.Column];
         ChessPiece? targetPiece = board[move.To.Row, move.To.Column];
         BoardPosition capturedPosition = move.CapturedPosition ?? move.To;
         ChessPiece? enPassantCapturedPiece = null;
-        ChessPiece? rookSourcePiece = null;
-        ChessPiece? rookTargetPiece = null;
-        BoardPosition? rookSource = null;
-        BoardPosition? rookTarget = null;
 
         board[move.From.Row, move.From.Column] = null;
         if (move.Kind == MoveKind.EnPassant)
@@ -872,24 +1142,7 @@ public sealed class ChessGame
 
         board[move.To.Row, move.To.Column] = sourcePiece;
 
-        if (move.Kind is MoveKind.CastlingKingSide or MoveKind.CastlingQueenSide)
-        {
-            int row = move.MovedPiece.Color == PieceColor.White ? 7 : 0;
-            rookSource = new BoardPosition(row, move.Kind == MoveKind.CastlingKingSide ? 7 : 0);
-            rookTarget = new BoardPosition(row, move.Kind == MoveKind.CastlingKingSide ? 5 : 3);
-            rookSourcePiece = board[rookSource.Value.Row, rookSource.Value.Column];
-            rookTargetPiece = board[rookTarget.Value.Row, rookTarget.Value.Column];
-            board[rookTarget.Value.Row, rookTarget.Value.Column] = rookSourcePiece;
-            board[rookSource.Value.Row, rookSource.Value.Column] = null;
-        }
-
         bool isInCheck = IsInCheck(move.MovedPiece.Color);
-
-        if (rookSource is not null && rookTarget is not null)
-        {
-            board[rookSource.Value.Row, rookSource.Value.Column] = rookSourcePiece;
-            board[rookTarget.Value.Row, rookTarget.Value.Column] = rookTargetPiece;
-        }
 
         board[move.From.Row, move.From.Column] = sourcePiece;
         board[move.To.Row, move.To.Column] = targetPiece;
@@ -1044,22 +1297,22 @@ public sealed class ChessGame
     private string GetFenCastlingRights()
     {
         string rights = string.Empty;
-        if (!whiteKingMoved && !whiteKingSideRookMoved && GetPiece(new BoardPosition(7, 7)) is { Type: PieceType.Rook, Color: PieceColor.White })
+        if (!whiteKingMoved && !whiteKingSideRookMoved && GetPiece(new BoardPosition(7, whiteKingSideRookStartColumn)) is { Type: PieceType.Rook, Color: PieceColor.White })
         {
             rights += "K";
         }
 
-        if (!whiteKingMoved && !whiteQueenSideRookMoved && GetPiece(new BoardPosition(7, 0)) is { Type: PieceType.Rook, Color: PieceColor.White })
+        if (!whiteKingMoved && !whiteQueenSideRookMoved && GetPiece(new BoardPosition(7, whiteQueenSideRookStartColumn)) is { Type: PieceType.Rook, Color: PieceColor.White })
         {
             rights += "Q";
         }
 
-        if (!blackKingMoved && !blackKingSideRookMoved && GetPiece(new BoardPosition(0, 7)) is { Type: PieceType.Rook, Color: PieceColor.Black })
+        if (!blackKingMoved && !blackKingSideRookMoved && GetPiece(new BoardPosition(0, blackKingSideRookStartColumn)) is { Type: PieceType.Rook, Color: PieceColor.Black })
         {
             rights += "k";
         }
 
-        if (!blackKingMoved && !blackQueenSideRookMoved && GetPiece(new BoardPosition(0, 0)) is { Type: PieceType.Rook, Color: PieceColor.Black })
+        if (!blackKingMoved && !blackQueenSideRookMoved && GetPiece(new BoardPosition(0, blackQueenSideRookStartColumn)) is { Type: PieceType.Rook, Color: PieceColor.Black })
         {
             rights += "q";
         }
@@ -1075,6 +1328,37 @@ public sealed class ChessGame
         whiteQueenSideRookMoved = !castlingRights.Contains('Q');
         blackKingSideRookMoved = !castlingRights.Contains('k');
         blackQueenSideRookMoved = !castlingRights.Contains('q');
+    }
+
+    private void InferCastlingStartColumnsFromBoard()
+    {
+        InferCastlingStartColumnsFromBackRank(PieceColor.White, 7);
+        InferCastlingStartColumnsFromBackRank(PieceColor.Black, 0);
+    }
+
+    private void InferCastlingStartColumnsFromBackRank(PieceColor color, int row)
+    {
+        int kingColumn = Enumerable.Range(0, 8)
+            .FirstOrDefault(column => board[row, column] is { Type: PieceType.King } piece && piece.Color == color);
+        int[] rookColumns = Enumerable.Range(0, 8)
+            .Where(column => board[row, column] is { Type: PieceType.Rook } piece && piece.Color == color)
+            .ToArray();
+
+        int queenSideRookColumn = rookColumns.Where(column => column < kingColumn).DefaultIfEmpty(0).Max();
+        int kingSideRookColumn = rookColumns.Where(column => column > kingColumn).DefaultIfEmpty(7).Min();
+
+        if (color == PieceColor.White)
+        {
+            whiteKingStartColumn = kingColumn;
+            whiteQueenSideRookStartColumn = queenSideRookColumn;
+            whiteKingSideRookStartColumn = kingSideRookColumn;
+        }
+        else
+        {
+            blackKingStartColumn = kingColumn;
+            blackQueenSideRookStartColumn = queenSideRookColumn;
+            blackKingSideRookStartColumn = kingSideRookColumn;
+        }
     }
 
     private static char GetFenPieceChar(ChessPiece piece)
@@ -1125,6 +1409,40 @@ public sealed class ChessGame
             (PieceColor.Black, false) => blackQueenSideRookMoved,
             _ => true
         };
+    }
+
+    private int GetKingStartColumn(PieceColor color)
+    {
+        return color == PieceColor.White ? whiteKingStartColumn : blackKingStartColumn;
+    }
+
+    private int GetRookStartColumn(PieceColor color, bool kingside)
+    {
+        return (color, kingside) switch
+        {
+            (PieceColor.White, true) => whiteKingSideRookStartColumn,
+            (PieceColor.White, false) => whiteQueenSideRookStartColumn,
+            (PieceColor.Black, true) => blackKingSideRookStartColumn,
+            (PieceColor.Black, false) => blackQueenSideRookStartColumn,
+            _ => kingside ? 7 : 0
+        };
+    }
+
+    private void RegisterDeliveredCheck(PieceColor color)
+    {
+        if (Variant != GameVariant.ThreeCheck)
+        {
+            return;
+        }
+
+        if (color == PieceColor.White)
+        {
+            whiteThreeCheckCount++;
+        }
+        else
+        {
+            blackThreeCheckCount++;
+        }
     }
 
     private static PieceColor Opposite(PieceColor color)

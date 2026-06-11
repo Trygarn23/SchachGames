@@ -4,9 +4,10 @@ namespace Schach.AI;
 
 public sealed class ChessAi
 {
+    private readonly OpeningBook openingBook = new();
     private readonly Random random = new();
 
-    public LegalMove? SelectMove(ChessGame game, AiDifficulty difficulty)
+    public LegalMove? SelectMove(ChessGame game, AiDifficulty difficulty, AiPersonality personality = AiPersonality.Balanced)
     {
         IReadOnlyList<LegalMove> moves = game.GetLegalMovesForCurrentTurn();
         if (moves.Count == 0)
@@ -14,19 +15,37 @@ public sealed class ChessAi
             return null;
         }
 
+        if (game.Variant == GameVariant.Classic && difficulty != AiDifficulty.Easy)
+        {
+            LegalMove? bookMove = openingBook.SelectMove(game, random);
+            if (bookMove is not null)
+            {
+                return bookMove;
+            }
+        }
+
         return difficulty switch
         {
             AiDifficulty.Easy => SelectRandomMove(moves),
-            AiDifficulty.Medium => SelectBestMove(moves, ScoreMediumMove),
-            AiDifficulty.Hard => SelectBestMove(moves, move => ScoreHardMove(game, move, depth: 3)),
+            AiDifficulty.Medium => SelectBestMove(moves, move => ScoreMediumMove(move) + ScorePersonalityMove(game, move, personality)),
+            AiDifficulty.Hard => SelectBestMove(moves, move => ScoreHardMove(game, move, depth: 3) + ScorePersonalityMove(game, move, personality)),
             _ => SelectRandomMove(moves)
         };
     }
 
-    public IReadOnlyList<string> GetCandidateSummaries(ChessGame game, AiDifficulty difficulty, int maxCount = 3)
+    public IReadOnlyList<string> GetCandidateSummaries(
+        ChessGame game,
+        AiDifficulty difficulty,
+        AiPersonality personality = AiPersonality.Balanced,
+        int maxCount = 3)
     {
         return game.GetLegalMovesForCurrentTurn()
-            .Select(move => new { Move = move, Score = difficulty == AiDifficulty.Hard ? ScoreHardMove(game, move, 2) : ScoreMediumMove(move) })
+            .Select(move => new
+            {
+                Move = move,
+                Score = (difficulty == AiDifficulty.Hard ? ScoreHardMove(game, move, 2) : ScoreMediumMove(move)) +
+                    ScorePersonalityMove(game, move, personality)
+            })
             .OrderByDescending(candidate => candidate.Score)
             .Take(maxCount)
             .Select(candidate => $"{candidate.Move.Notation}: {candidate.Score}")
@@ -90,6 +109,40 @@ public sealed class ChessAi
 
         score += GetCenterBonus(move.To);
         score += GetPawnProgressBonus(move);
+        return score;
+    }
+
+    private int ScorePersonalityMove(ChessGame game, LegalMove move, AiPersonality personality)
+    {
+        int score = 0;
+        ChessGame simulation = game.Clone();
+        bool canSimulate = simulation.TryMove(move, out _);
+        PieceColor mover = move.MovedPiece.Color;
+        PieceColor opponent = mover == PieceColor.White ? PieceColor.Black : PieceColor.White;
+
+        switch (personality)
+        {
+            case AiPersonality.Aggressive:
+                score += move.CapturedPiece is null ? 0 : GetPieceValue(move.CapturedPiece.Type) / 2;
+                score += canSimulate && simulation.IsInCheck(opponent) ? 180 : 0;
+                score += GetPawnProgressBonus(move) * 5;
+                break;
+            case AiPersonality.Defensive:
+                score += move.Kind is MoveKind.CastlingKingSide or MoveKind.CastlingQueenSide ? 220 : 0;
+                score += canSimulate && !simulation.IsInCheck(mover) ? 50 : 0;
+                score -= GetBestOpponentCaptureValue(simulation);
+                break;
+            case AiPersonality.Tactical:
+                score += canSimulate && simulation.IsInCheck(opponent) ? 240 : 0;
+                score += move.Kind == MoveKind.Promotion ? 300 : 0;
+                score += GetCenterBonus(move.To) * 12;
+                break;
+            case AiPersonality.Chaotic:
+                score += random.Next(-260, 261);
+                score += move.CapturedPiece is null ? 70 : -40;
+                break;
+        }
+
         return score;
     }
 

@@ -34,12 +34,19 @@
                 <MenuItem Header="Zug _zurueck" Click="PreviousMoveMenuItem_Click" />
                 <MenuItem Header="Zug _vor" Click="NextMoveMenuItem_Click" />
             </MenuItem>
+            <MenuItem Header="_Ansicht">
+                <MenuItem Header="_Command Palette" Click="CommandPaletteMenuItem_Click" />
+                <MenuItem Header="_Sidebar umschalten" Click="ToggleSidebarMenuItem_Click" />
+            </MenuItem>
+            <MenuItem Header="_Hilfe">
+                <MenuItem Header="_Kurzhilfe..." Click="HelpMenuItem_Click" />
+            </MenuItem>
         </Menu>
 
-    <Grid Margin="20">
+    <Grid x:Name="MainGrid" Margin="20">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" MinWidth="520" />
-            <ColumnDefinition Width="320" />
+            <ColumnDefinition x:Name="BoardColumn" Width="*" MinWidth="520" />
+            <ColumnDefinition x:Name="SideColumn" Width="320" />
         </Grid.ColumnDefinitions>
 
         <Border Grid.Column="0"
@@ -53,7 +60,7 @@
                      Margin="12" />
         </Border>
 
-        <Grid Grid.Column="1" Margin="20,0,0,0">
+        <Grid x:Name="SidebarPanel" Grid.Column="1" Margin="20,0,0,0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
@@ -78,6 +85,42 @@
                           VerticalScrollBarVisibility="Auto">
                 <StackPanel>
                     <Border Padding="14"
+                            Background="#2B3038"
+                            BorderBrush="#3A414C"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <StackPanel>
+                            <TextBlock Text="Schnellstart"
+                                       FontSize="15"
+                                       FontWeight="SemiBold"
+                                       Foreground="#F4F1E8" />
+                            <WrapPanel Margin="0,10,0,0">
+                                <Button Content="Klassisch"
+                                        Tag="Classic"
+                                        MinWidth="78"
+                                        Margin="0,0,8,8"
+                                        Click="QuickStartButton_Click" />
+                                <Button Content="Blitz"
+                                        Tag="Blitz"
+                                        MinWidth="78"
+                                        Margin="0,0,8,8"
+                                        Click="QuickStartButton_Click" />
+                                <Button Content="Fun"
+                                        Tag="Fun"
+                                        MinWidth="78"
+                                        Margin="0,0,8,8"
+                                        Click="QuickStartButton_Click" />
+                                <Button Content="Analyse"
+                                        Tag="Analysis"
+                                        MinWidth="78"
+                                        Margin="0,0,0,8"
+                                        Click="QuickStartButton_Click" />
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Padding="14"
+                            Margin="0,14,0,0"
                             Background="#2B3038"
                             BorderBrush="#3A414C"
                             BorderThickness="1"
@@ -195,6 +238,16 @@
                                        FontSize="25"
                                        Foreground="#F4F1E8"
                                        Text="-" />
+                            <TextBlock Text="Materialbilanz"
+                                       Margin="0,12,0,0"
+                                       FontSize="12"
+                                       Foreground="#AAB0BA" />
+                            <TextBlock x:Name="MaterialBalanceText"
+                                       Margin="0,4,0,0"
+                                       FontSize="15"
+                                       FontWeight="SemiBold"
+                                       Foreground="#F4F1E8"
+                                       Text="Ausgeglichen" />
                         </StackPanel>
                     </Border>
 
@@ -238,6 +291,19 @@
                                 <ComboBoxItem Content="Mensch gegen Mensch" Tag="HumanVsHuman" />
                                 <ComboBoxItem Content="Mensch gegen KI" Tag="HumanVsAi" />
                             </ComboBox>
+                            <ComboBox x:Name="GameVariantComboBox"
+                                      Margin="0,10,0,0"
+                                      Height="34"
+                                      SelectionChanged="GameVariantComboBox_SelectionChanged"
+                                      SelectedIndex="0">
+                                <ComboBoxItem Content="Klassisch" Tag="Classic" />
+                                <ComboBoxItem Content="Chess960" Tag="Chess960" />
+                                <ComboBoxItem Content="Bauernkrieg" Tag="PawnsWar" />
+                                <ComboBoxItem Content="Springerduell" Tag="KnightsDuel" />
+                                <ComboBoxItem Content="King of the Hill" Tag="KingOfTheHill" />
+                                <ComboBoxItem Content="Drei-Schach" Tag="ThreeCheck" />
+                                <ComboBoxItem Content="Ohne Damen" Tag="NoQueens" />
+                            </ComboBox>
                             <ComboBox x:Name="AiDifficultyComboBox"
                                       Margin="0,10,0,0"
                                       Height="34"
@@ -256,11 +322,70 @@
                                 <ComboBoxItem Content="KI spielt Weiss" Tag="White" />
                                 <ComboBoxItem Content="KI spielt Schwarz" Tag="Black" />
                             </ComboBox>
+                            <ComboBox x:Name="AiPersonalityComboBox"
+                                      Margin="0,10,0,0"
+                                      Height="34"
+                                      SelectionChanged="AiPersonalityComboBox_SelectionChanged"
+                                      SelectedIndex="0">
+                                <ComboBoxItem Content="Ausgeglichen" Tag="Balanced" />
+                                <ComboBoxItem Content="Aggressiv" Tag="Aggressive" />
+                                <ComboBoxItem Content="Defensiv" Tag="Defensive" />
+                                <ComboBoxItem Content="Taktisch" Tag="Tactical" />
+                                <ComboBoxItem Content="Chaotisch" Tag="Chaotic" />
+                            </ComboBox>
                             <TextBlock Margin="0,8,0,0"
                                        Foreground="#AAB0BA"
                                        FontSize="12"
                                        TextWrapping="Wrap"
                                        Text="Die KI-Farbe ist konfigurierbar." />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Margin="0,14,0,0"
+                            Padding="14"
+                            Background="#252A31"
+                            BorderBrush="#333A44"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                        <StackPanel>
+                            <TextBlock Text="Analyse"
+                                       FontSize="15"
+                                       FontWeight="SemiBold"
+                                       Foreground="#F4F1E8" />
+                            <TextBlock x:Name="EvaluationText"
+                                       Margin="0,8,0,0"
+                                       Foreground="#AAB0BA"
+                                       Text="Bewertung: 0" />
+                            <ProgressBar x:Name="EvaluationBar"
+                                         Margin="0,8,0,0"
+                                         Height="10"
+                                         Minimum="0"
+                                         Maximum="100"
+                                         Value="50" />
+                            <Button Content="Bester Zug"
+                                    Margin="0,10,0,0"
+                                    Height="30"
+                                    Click="BestMoveButton_Click" />
+                            <WrapPanel Margin="0,8,0,0">
+                                <Button Content="Zurueck"
+                                        MinWidth="80"
+                                        Margin="0,0,8,0"
+                                        Click="PreviousMoveButton_Click" />
+                                <Button Content="Vor"
+                                        MinWidth="80"
+                                        Click="NextMoveButton_Click" />
+                            </WrapPanel>
+                            <TextBlock x:Name="AiCandidatesText"
+                                       Margin="0,8,0,0"
+                                       Foreground="#AAB0BA"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Text="Noch keine Kandidaten." />
+                            <TextBlock x:Name="CoachText"
+                                       Margin="0,8,0,0"
+                                       Foreground="#E8C16A"
+                                       FontSize="12"
+                                       TextWrapping="Wrap" />
                         </StackPanel>
                     </Border>
 
@@ -282,6 +407,12 @@
                                       SelectedIndex="0">
                                 <ComboBoxItem Content="Dunkel" Tag="Dark" />
                                 <ComboBoxItem Content="Hell" Tag="Light" />
+                                <ComboBoxItem Content="Holz" Tag="Wood" />
+                                <ComboBoxItem Content="Marmor" Tag="Marble" />
+                                <ComboBoxItem Content="Neon" Tag="Neon" />
+                                <ComboBoxItem Content="Retro" Tag="Retro" />
+                                <ComboBoxItem Content="Minimal" Tag="Minimal" />
+                                <ComboBoxItem Content="High Contrast" Tag="HighContrast" />
                             </ComboBox>
                             <CheckBox x:Name="AnimationCheckBox"
                                       Margin="4,12,0,0"

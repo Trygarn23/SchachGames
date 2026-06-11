@@ -10,5 +10,7 @@ public enum GameEndReason
     InsufficientMaterial,
     Resignation,
     DrawAgreement,
-    Timeout
+    Timeout,
+    ThreeCheck,
+    KingOfTheHill
 }
