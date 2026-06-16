@@ -250,6 +250,54 @@ public sealed class ChessGameTests
     }
 
     [Fact]
+    public void Ai_HighSkillStillSelectsLegalMove()
+    {
+        ChessGame game = new();
+        Move(game, "e2", "e4");
+        Move(game, "e7", "e5");
+        Move(game, "g1", "f3");
+
+        LegalMove? move = new ChessAi().SelectMove(game, AiDifficulty.Hard, AiPersonality.Tactical, skillLevel: 10);
+
+        Assert.NotNull(move);
+        Assert.Contains(move.To, game.GetLegalMoves(move.From));
+    }
+
+    [Fact]
+    public void Ai_RespectsCancellationToken()
+    {
+        ChessGame game = new();
+        using CancellationTokenSource cancellation = new();
+        cancellation.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            new ChessAi().SelectMove(
+                game,
+                AiDifficulty.Hard,
+                AiPersonality.Balanced,
+                skillLevel: 10,
+                cancellationToken: cancellation.Token));
+    }
+
+    [Fact]
+    public void Ai_TinyTimeBudgetStillReturnsLegalMove()
+    {
+        ChessGame game = new();
+        Move(game, "e2", "e4");
+        Move(game, "e7", "e5");
+
+        LegalMove? move = new ChessAi().SelectMove(
+            game,
+            AiDifficulty.Hard,
+            AiPersonality.Balanced,
+            skillLevel: 10,
+            timeBudget: TimeSpan.FromMilliseconds(1));
+
+        Assert.NotNull(move);
+        Assert.Contains(move.To, game.GetLegalMoves(move.From));
+    }
+
+    [Fact]
     public void Chess960_StartPositionKeepsBackRanksSymmetric()
     {
         ChessGame game = new();

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Schach.Logic;
 
 namespace Schach.AI;
@@ -7,15 +8,30 @@ public sealed class ChessAi
     private readonly OpeningBook openingBook = new();
     private readonly Random random = new();
 
-    public LegalMove? SelectMove(ChessGame game, AiDifficulty difficulty, AiPersonality personality = AiPersonality.Balanced)
+    public LegalMove? SelectMove(
+        ChessGame game,
+        AiDifficulty difficulty,
+        AiPersonality personality = AiPersonality.Balanced,
+        int skillLevel = 5,
+        TimeSpan? timeBudget = null,
+        CancellationToken cancellationToken = default)
     {
+        skillLevel = Math.Clamp(skillLevel, 1, 10);
+        cancellationToken.ThrowIfCancellationRequested();
+        long startedAt = Stopwatch.GetTimestamp();
+        bool IsTimeExpired()
+        {
+            return timeBudget is not null &&
+                Stopwatch.GetElapsedTime(startedAt) >= timeBudget.Value;
+        }
+
         IReadOnlyList<LegalMove> moves = game.GetLegalMovesForCurrentTurn();
         if (moves.Count == 0)
         {
             return null;
         }
 
-        if (game.Variant == GameVariant.Classic && difficulty != AiDifficulty.Easy)
+        if (game.Variant == GameVariant.Classic && difficulty != AiDifficulty.Easy && skillLevel >= 3)
         {
             LegalMove? bookMove = openingBook.SelectMove(game, random);
             if (bookMove is not null)
@@ -27,8 +43,17 @@ public sealed class ChessAi
         return difficulty switch
         {
             AiDifficulty.Easy => SelectRandomMove(moves),
-            AiDifficulty.Medium => SelectBestMove(moves, move => ScoreMediumMove(move) + ScorePersonalityMove(game, move, personality)),
-            AiDifficulty.Hard => SelectBestMove(moves, move => ScoreHardMove(game, move, depth: 3) + ScorePersonalityMove(game, move, personality)),
+            AiDifficulty.Medium => SelectBestMove(
+                OrderMoves(moves),
+                move => ScoreMediumMove(move) + ScorePersonalityMove(game, move, personality, cancellationToken),
+                cancellationToken,
+                IsTimeExpired),
+            AiDifficulty.Hard => SelectBestMove(
+                OrderMoves(moves),
+                move => ScoreHardMove(game, move, GetSearchDepth(skillLevel), cancellationToken, IsTimeExpired) +
+                    ScorePersonalityMove(game, move, personality, cancellationToken),
+                cancellationToken,
+                IsTimeExpired),
             _ => SelectRandomMove(moves)
         };
     }
@@ -37,13 +62,16 @@ public sealed class ChessAi
         ChessGame game,
         AiDifficulty difficulty,
         AiPersonality personality = AiPersonality.Balanced,
+        int skillLevel = 5,
         int maxCount = 3)
     {
-        return game.GetLegalMovesForCurrentTurn()
+        skillLevel = Math.Clamp(skillLevel, 1, 10);
+        int summaryDepth = Math.Min(GetSearchDepth(skillLevel), 2);
+        return OrderMoves(game.GetLegalMovesForCurrentTurn())
             .Select(move => new
             {
                 Move = move,
-                Score = (difficulty == AiDifficulty.Hard ? ScoreHardMove(game, move, 2) : ScoreMediumMove(move)) +
+                Score = (difficulty == AiDifficulty.Hard ? ScoreHardMove(game, move, summaryDepth) : ScoreMediumMove(move)) +
                     ScorePersonalityMove(game, move, personality)
             })
             .OrderByDescending(candidate => candidate.Score)
@@ -59,14 +87,31 @@ public sealed class ChessAi
 
     private LegalMove SelectBestMove(
         IReadOnlyList<LegalMove> moves,
-        Func<LegalMove, int> scoreMove)
+        Func<LegalMove, int> scoreMove,
+        CancellationToken cancellationToken = default,
+        Func<bool>? isTimeExpired = null)
     {
         int bestScore = int.MinValue;
         List<LegalMove> bestMoves = [];
 
         foreach (LegalMove move in moves)
         {
-            int score = scoreMove(move);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (bestMoves.Count > 0 && isTimeExpired?.Invoke() == true)
+            {
+                break;
+            }
+
+            int score;
+            try
+            {
+                score = scoreMove(move);
+            }
+            catch (TimeoutException)
+            {
+                break;
+            }
+
             if (score > bestScore)
             {
                 bestScore = score;
@@ -79,7 +124,7 @@ public sealed class ChessAi
             }
         }
 
-        return SelectRandomMove(bestMoves);
+        return bestMoves.Count > 0 ? SelectRandomMove(bestMoves) : SelectRandomMove(moves);
     }
 
     private int ScoreMediumMove(LegalMove move)
@@ -112,10 +157,15 @@ public sealed class ChessAi
         return score;
     }
 
-    private int ScorePersonalityMove(ChessGame game, LegalMove move, AiPersonality personality)
+    private int ScorePersonalityMove(
+        ChessGame game,
+        LegalMove move,
+        AiPersonality personality,
+        CancellationToken cancellationToken = default)
     {
         int score = 0;
         ChessGame simulation = game.Clone();
+        cancellationToken.ThrowIfCancellationRequested();
         bool canSimulate = simulation.TryMove(move, out _);
         PieceColor mover = move.MovedPiece.Color;
         PieceColor opponent = mover == PieceColor.White ? PieceColor.Black : PieceColor.White;
@@ -146,8 +196,18 @@ public sealed class ChessAi
         return score;
     }
 
-    private int ScoreHardMove(ChessGame game, LegalMove move, int depth)
+    private int ScoreHardMove(
+        ChessGame game,
+        LegalMove move,
+        int depth,
+        CancellationToken cancellationToken = default,
+        Func<bool>? isTimeExpired = null)
     {
+        if (isTimeExpired?.Invoke() == true)
+        {
+            throw new TimeoutException();
+        }
+
         ChessGame simulation = game.Clone();
         if (!simulation.TryMove(move, out _))
         {
@@ -160,7 +220,9 @@ public sealed class ChessAi
             move.MovedPiece.Color,
             int.MinValue + 1,
             int.MaxValue - 1,
-            maximizing: false);
+            maximizing: false,
+            cancellationToken,
+            isTimeExpired);
     }
 
     private int GetBestOpponentCaptureValue(ChessGame simulation)
@@ -205,14 +267,22 @@ public sealed class ChessAi
         PieceColor aiSide,
         int alpha,
         int beta,
-        bool maximizing)
+        bool maximizing,
+        CancellationToken cancellationToken = default,
+        Func<bool>? isTimeExpired = null)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (isTimeExpired?.Invoke() == true)
+        {
+            throw new TimeoutException();
+        }
+
         if (depth == 0 || game.IsGameOver)
         {
             return EvaluatePosition(game, aiSide);
         }
 
-        IReadOnlyList<LegalMove> moves = game.GetLegalMovesForCurrentTurn();
+        IReadOnlyList<LegalMove> moves = OrderMoves(game.GetLegalMovesForCurrentTurn());
         if (moves.Count == 0)
         {
             return EvaluatePosition(game, aiSide);
@@ -225,7 +295,7 @@ public sealed class ChessAi
             {
                 ChessGame simulation = game.Clone();
                 simulation.TryMove(move, out _);
-                best = Math.Max(best, Minimax(simulation, depth - 1, aiSide, alpha, beta, maximizing: false));
+                best = Math.Max(best, Minimax(simulation, depth - 1, aiSide, alpha, beta, maximizing: false, cancellationToken, isTimeExpired));
                 alpha = Math.Max(alpha, best);
                 if (beta <= alpha)
                 {
@@ -241,7 +311,7 @@ public sealed class ChessAi
         {
             ChessGame simulation = game.Clone();
             simulation.TryMove(move, out _);
-            worst = Math.Min(worst, Minimax(simulation, depth - 1, aiSide, alpha, beta, maximizing: true));
+            worst = Math.Min(worst, Minimax(simulation, depth - 1, aiSide, alpha, beta, maximizing: true, cancellationToken, isTimeExpired));
             beta = Math.Min(beta, worst);
             if (beta <= alpha)
             {
@@ -280,6 +350,25 @@ public sealed class ChessAi
         }
 
         return score;
+    }
+
+    private static IReadOnlyList<LegalMove> OrderMoves(IEnumerable<LegalMove> moves)
+    {
+        return moves
+            .OrderByDescending(move => move.CapturedPiece is null ? 0 : GetPieceValue(move.CapturedPiece.Type) - GetPieceValue(move.MovedPiece.Type))
+            .ThenByDescending(move => move.Kind == MoveKind.Promotion ? GetPieceValue(move.PromotionType ?? PieceType.Queen) : 0)
+            .ThenByDescending(move => GetCenterBonus(move.To))
+            .ToList();
+    }
+
+    private static int GetSearchDepth(int skillLevel)
+    {
+        return skillLevel switch
+        {
+            <= 2 => 1,
+            <= 5 => 2,
+            _ => 3
+        };
     }
 
     private static int GetCenterBonus(BoardPosition position)

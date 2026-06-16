@@ -14,6 +14,8 @@ public sealed class AppSettings
 
     public string AiPersonality { get; set; } = "Balanced";
 
+    public int AiSkillLevel { get; set; } = 5;
+
     public int ClockMinutes { get; set; } = 10;
 
     public int ClockIncrementSeconds { get; set; }

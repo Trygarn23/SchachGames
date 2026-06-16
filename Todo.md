@@ -32,6 +32,7 @@
 - [x] Hinweis anzeigen, wenn keine legalen Zuege fuer eine Figur existieren.
 - [x] KI-Farbe auswaehlbar machen: Schwarz, Weiss oder beide aus.
 - [x] Modusauswahl anbieten: Mensch gegen Mensch, Mensch gegen KI.
+- [x] Match erst nach Knopfdruck starten, nicht direkt nach Programmstart.
 - [x] Schnellstart-Panel mit grossen Kacheln fuer Klassisch, Blitz, Fun Mode und Analyse.
 - [x] In-Game Command Palette planen, z. B. Strg+K fuer Aktionen.
 - [x] Kontextmenue auf dem Brett mit Markieren, Pfeil setzen, Analyse starten.
@@ -133,6 +134,9 @@
 - [x] Fun Mode: No-Queen-Modus fuer schnelle Partien planen.
 - [ ] Fun Mode: Randomizer, der nach jedem Zug ein Brett-Theme wechselt.
 - [x] Fun Mode: Chaos Board mit zufaellig verteilten legalen Figuren planen.
+- [ ] Fun Mode: Atomic Chess mit Explosionsregeln planen. +1 Feld in alle Richtungen bei Schlag, inklusive eigener Figuren.
+- [ ] Fun Mode: Fog of War mit verdeckten Figuren planen, nur eigene Figuren sichtbar.
+- [ ] Fun Mode: Schach nur mit Koordinatenmarkierungen planen, keine Figuren sichtbar.
 - [ ] Fun Mode: Power-Up-Felder als Arcade-Experiment planen.
 - [ ] Fun Mode: Blindfold-Training mit ausgeblendeten Figuren planen.
 - [ ] Fun Mode: Memory-Schach mit kurz eingeblendeten Figuren pruefen.
@@ -182,11 +186,49 @@
 - [ ] Blunder-Erkennung implementieren.
 - [x] Beste-Zug-Hinweis per Button anzeigen.
 - [x] Eroeffnungsbuch als JSON laden.
+- [x] KI-Berechnung in Hintergrund-Task auslagern, damit die UI nicht einfriert.
+- [x] Laufende KI-Berechnung bei neuem Spiel abbrechen.
+- [x] KI-Suchtiefe ueber Skill-Level 1 bis 10 steuern.
+- [x] KI-Zeitbudget anhand Modus, Restzeit und Inkrement berechnen.
+- [x] KI-Suche bei kleinem Zeitbudget kontrolliert abbrechen und besten gefundenen Zug spielen.
+- [x] Alpha-Beta-Suche durch Move Ordering beschleunigen.
+- [x] Kandidatenanzeige auf leichte Analyse begrenzen, damit die Sidebar nicht haengt.
+- [x] Automatische Kandidatenberechnung aus der UI-Aktualisierung entfernen.
+- [x] Bester-Zug-Analyse nur auf Knopfdruck und im Hintergrund berechnen.
 - [ ] Engine- und interne KI im Analysemodus vergleichbar anzeigen.
 - [x] KI-Debug-Panel mit Kandidaten, Scores und Suchtiefe ergaenzen.
 - [ ] Adaptiven Schwierigkeitsgrad planen, der sich an Spielerstaerke anpasst.
 - [ ] Trainingsmodus: KI macht absichtlich typische Anfaengerfehler.
 - [ ] Puzzle-Generator aus gespielten Partien planen.
+- [ ] Transposition Table fuer Minimax planen.
+- [ ] Zobrist-Hashing fuer Stellungswiederverwendung planen.
+- [ ] Iterative Deepening fuer schwere KI planen.
+- [ ] Zeitbudget pro KI-Zug statt nur fixer Tiefe planen.
+- [ ] Principal Variation fuer Analyseanzeige speichern.
+- [ ] Root-Move-Parallelisierung fuer sehr hohe Stufen pruefen.
+- [ ] Killer-Move-Heuristik fuer Alpha-Beta pruefen.
+- [ ] Quiescence Search gegen taktische Horizon-Effekte planen.
+- [ ] KI-Performance-Overlay mit Knoten/Sekunde und Suchtiefe planen.
+- [ ] KI-Cache beim neuen Spiel sauber leeren.
+- [ ] Hintergrundberechnung auch fuer Beste-Zug-Button planen.
+- [ ] UI-Fortschrittsanzeige fuer lange KI-Suche planen.
+- [x] KI-Schwierigkeit per Slider von 1 bis 10 steuerbar machen.
+- [x] KI-Stufe im UI sichtbar anzeigen.
+- [ ] KI - Schwierigkeitsgrade Leicht, Mittel und Schwer in der UI ausblenden, da jetzt der Slider dafür da ist.
+- [ ] KI - Schwierigkeitsgrad 1-10 in der UI anzeigen, z. B. als "KI-Stufe: 3".
+- [ ] KI - Persoenlichkeit per Dropdown auswählbar machen: Ausgeglichen, Aggressiv, Defensiv, Taktisch, Chaotisch.
+- [ ] KI - Persoenlichkeit im UI sichtbar anzeigen.
+- [ ] KI - Persoenlichkeiten in der Bewertungsfunktion abbilden, z. B. aggressiv mit riskanteren Zuegen.
+- [ ] KI - Coach-Modus planen, der nach Fehlern Hinweise gibt.
+- [ ] KI - Coach-Kommentare nach jedem Zug optional anzeigen.
+- [ ] KI - Blunder-Erkennung planen.
+- [ ] KI - Blunder-Erkennung implementieren.
+- [ ] KI - Beste-Zug-Hinweis per Button anzeigen.
+- [ ] KI - Eroeffnungsbuch als JSON? laden.
+- [ ] KI - Berechnung in Hintergrund-Task auslagern, damit die UI nicht einfriert.
+- [ ] KI - Laufende Berechnung bei neuem Spiel abbrechen.
+- [ ] KI - Suchtiefe ueber Skill-Level 1 bis 10 stehend machen.
+- [ ] KI - Schwierigkeitsgrad 1-10 ersetzend für leicht, mittel und schwer implementieren
 
 ---
 
@@ -290,6 +332,9 @@
 - [x] Tests fuer Puzzle-Loesungen ergaenzen.
 - [ ] Tests fuer Bewertungsbalken/Analyseausgabe ergaenzen.
 - [x] Performance-Test fuer KI-Suche ergaenzen.
+- [x] Regressionstest fuer KI-Abbruch per CancellationToken ergaenzen.
+- [x] Regressionstest fuer hohe KI-Stufe mit legalem Zug ergaenzen.
+- [x] Regressionstest fuer sehr kleines KI-Zeitbudget ergaenzen.
 - [x] Langlauf-Test fuer 100 KI-Partien ohne Crash planen.
 - [x] UI-Test fuer Promotiondialog planen.
 - [x] UI-Test fuer Theme-Wechsel planen.
@@ -329,6 +374,7 @@
 - [x] GitHub Actions fuer Build/Test planen.
 - [x] Changelog einfuehren.
 - [x] Version im UI anzeigen.
+- [x] Version auf 1.2 setzen.
 - [ ] Fun Mode Hub mit eigener Startseite planen.
 - [x] Puzzle-/Taktiktrainer planen.
 - [ ] Taegliche Aufgabe lokal generieren oder aus Datei laden.
@@ -349,6 +395,8 @@
 - [ ] Crash-Report/Logdatei lokal planen.
 - [ ] Mehrsprachigkeit Deutsch/Englisch vorbereiten.
 - [ ] Credits/About-Dialog mit Version, Build und Lizenzinfos ergaenzen.
+- [ ] Profiling-Session fuer schwere KI dokumentieren.
+- [ ] Release-Checkliste fuer Performance auf alten Rechnern ergaenzen.
 
 ---
 

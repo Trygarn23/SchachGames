@@ -31,9 +31,11 @@ public partial class MainWindow : Window
     private TimeSpan blackTime = TimeSpan.FromMinutes(10);
     private int clockIncrementSeconds;
     private int aiGeneration;
+    private CancellationTokenSource? aiSearchCancellationSource;
     private bool isClockPaused;
     private bool isAiThinking;
     private bool isLoadingSettings = true;
+    private bool isMatchStarted;
     private bool isReplaying;
     private bool isSidebarCollapsed;
     private List<MoveRecord> analysisMoves = [];
@@ -61,6 +63,8 @@ public partial class MainWindow : Window
         SelectComboBoxItemByTag(AiDifficultyComboBox, appSettings.AiDifficulty);
         SelectComboBoxItemByTag(AiSideComboBox, appSettings.AiSide);
         SelectComboBoxItemByTag(AiPersonalityComboBox, appSettings.AiPersonality);
+        AiSkillSlider.Value = Math.Clamp(appSettings.AiSkillLevel, 1, 10);
+        UpdateAiSkillText();
         SelectComboBoxItemByTag(BoardThemeComboBox, appSettings.BoardTheme);
         AnimationCheckBox.IsChecked = appSettings.AnimationsEnabled;
         SoundCheckBox.IsChecked = appSettings.SoundsEnabled;
@@ -71,8 +75,7 @@ public partial class MainWindow : Window
         ApplyClockPreset(saveSettings: false);
         Closing += (_, _) => SaveWindowBounds();
 
-        ResetUiState();
-        UpdateStatus(game.GetStatusText("Spiel bereit"));
+        PrepareNewGame("Spiel vorbereitet. Druecke Spiel starten.");
     }
 
     private void RecordMove(MoveResult move)
@@ -156,7 +159,13 @@ public partial class MainWindow : Window
 
     private void NewGameButton_Click(object sender, RoutedEventArgs e)
     {
-        StartNewGame();
+        if (isMatchStarted)
+        {
+            PrepareNewGame("Neues Spiel vorbereitet. Druecke Spiel starten.");
+            return;
+        }
+
+        BeginMatch();
     }
 
     private void FlipBoardCheckBox_Changed(object sender, RoutedEventArgs e)
@@ -182,7 +191,15 @@ public partial class MainWindow : Window
 
         if (e.Key == Key.N)
         {
-            StartNewGame();
+            if (isMatchStarted)
+            {
+                PrepareNewGame("Neues Spiel vorbereitet. Druecke Spiel starten.");
+            }
+            else
+            {
+                BeginMatch();
+            }
+
             e.Handled = true;
             return;
         }
@@ -211,6 +228,19 @@ public partial class MainWindow : Window
         appSettings.AiDifficulty = GetSelectedComboBoxTag(AiDifficultyComboBox) ?? "Off";
         settingsService.Save(appSettings);
         QueueAiMoveIfNeeded();
+    }
+
+    private void AiSkillSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        UpdateAiSkillText();
+        if (isLoadingSettings)
+        {
+            return;
+        }
+
+        appSettings.AiSkillLevel = GetSelectedAiSkillLevel();
+        settingsService.Save(appSettings);
+        UpdateSideInfo();
     }
 
     private void AiSideComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -246,7 +276,7 @@ public partial class MainWindow : Window
 
         appSettings.GameVariant = GetSelectedComboBoxTag(GameVariantComboBox) ?? GameVariant.Classic.ToString();
         settingsService.Save(appSettings);
-        StartNewGame();
+        PrepareNewGame("Variante geaendert. Druecke Spiel starten.");
     }
 
     private void AiPersonalityComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -291,7 +321,7 @@ public partial class MainWindow : Window
 
     private void ClockTimer_Tick(object? sender, EventArgs e)
     {
-        if (game.IsGameOver || isClockPaused)
+        if (!isMatchStarted || game.IsGameOver || isClockPaused)
         {
             return;
         }
@@ -335,7 +365,7 @@ public partial class MainWindow : Window
 
     private void NewGameMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        StartNewGame();
+        PrepareNewGame("Neues Spiel vorbereitet. Druecke Spiel starten.");
     }
 
     private void SaveGameMenuItem_Click(object sender, RoutedEventArgs e)
@@ -518,13 +548,39 @@ public partial class MainWindow : Window
             MessageBoxImage.Information);
     }
 
-    private void BestMoveButton_Click(object sender, RoutedEventArgs e)
+    private async void BestMoveButton_Click(object sender, RoutedEventArgs e)
     {
         AiDifficulty difficulty = GetSelectedAiDifficulty() ?? AiDifficulty.Hard;
-        IReadOnlyList<string> candidates = chessAi.GetCandidateSummaries(game, difficulty, GetSelectedAiPersonality(), maxCount: 3);
-        AiCandidatesText.Text = candidates.Count == 0
-            ? "Keine legalen Kandidaten."
-            : string.Join("\n", candidates);
+        ChessGame analysisPosition = game.Clone();
+        AiPersonality personality = GetSelectedAiPersonality();
+        int skillLevel = Math.Min(GetSelectedAiSkillLevel(), 5);
+        Button? button = sender as Button;
+        if (button is not null)
+        {
+            button.IsEnabled = false;
+        }
+
+        AiCandidatesText.Text = "Analyse laeuft im Hintergrund...";
+        try
+        {
+            IReadOnlyList<string> candidates = await Task.Run(() =>
+                chessAi.GetCandidateSummaries(
+                    analysisPosition,
+                    difficulty,
+                    personality,
+                    skillLevel,
+                    maxCount: 3));
+            AiCandidatesText.Text = candidates.Count == 0
+                ? "Keine legalen Kandidaten."
+                : string.Join("\n", candidates);
+        }
+        finally
+        {
+            if (button is not null)
+            {
+                button.IsEnabled = true;
+            }
+        }
     }
 
     private void QuickStartButton_Click(object sender, RoutedEventArgs e)
@@ -562,7 +618,7 @@ public partial class MainWindow : Window
         appSettings.GameMode = GetSelectedComboBoxTag(GameModeComboBox) ?? appSettings.GameMode;
         appSettings.GameVariant = GetSelectedComboBoxTag(GameVariantComboBox) ?? appSettings.GameVariant;
         settingsService.Save(appSettings);
-        StartNewGame();
+        PrepareNewGame("Schnellstart vorbereitet. Druecke Spiel starten.");
     }
 
     private void CommandPaletteMenuItem_Click(object sender, RoutedEventArgs e)
@@ -596,7 +652,7 @@ public partial class MainWindow : Window
             Margin = new Thickness(0, 0, 0, 12)
         });
 
-        AddCommandButton(panel, "Neues Spiel", StartNewGame);
+        AddCommandButton(panel, "Neues Spiel vorbereiten", () => PrepareNewGame("Neues Spiel vorbereitet. Druecke Spiel starten."));
         AddCommandButton(panel, "Bester Zug", () => BestMoveButton_Click(this, new RoutedEventArgs()));
         AddCommandButton(panel, "Brett drehen", () => FlipBoardCheckBox.IsChecked = FlipBoardCheckBox.IsChecked != true);
         AddCommandButton(panel, "Sidebar umschalten", ToggleSidebar);
@@ -661,25 +717,40 @@ public partial class MainWindow : Window
     private async void QueueAiMoveIfNeeded()
     {
         AiDifficulty? difficulty = GetSelectedAiDifficulty();
-        if (difficulty is null || isAiThinking || game.IsGameOver || !IsAiSide(game.CurrentTurn))
+        if (!isMatchStarted || difficulty is null || isAiThinking || game.IsGameOver || !IsAiSide(game.CurrentTurn))
         {
             return;
         }
 
         int generation = ++aiGeneration;
+        aiSearchCancellationSource?.Cancel();
+        aiSearchCancellationSource?.Dispose();
+        aiSearchCancellationSource = new CancellationTokenSource();
+        CancellationToken cancellationToken = aiSearchCancellationSource.Token;
+        ChessGame searchPosition = game.Clone();
+        AiPersonality personality = GetSelectedAiPersonality();
+        int skillLevel = GetSelectedAiSkillLevel();
         isAiThinking = true;
         boardView.InteractionLocked = true;
-        UpdateStatus("KI denkt...");
+        UpdateStatus($"KI denkt im Hintergrund... Stufe {skillLevel}/10");
 
         try
         {
-            await Task.Delay(GetAiDelay(difficulty.Value));
-            if (generation != aiGeneration || game.IsGameOver || !IsAiSide(game.CurrentTurn))
+            TimeSpan thinkingBudget = GetAiThinkingBudget(difficulty.Value, skillLevel);
+            TimeSpan displayDelay = TimeSpan.FromMilliseconds(Math.Min(180, Math.Max(60, thinkingBudget.TotalMilliseconds * 0.2)));
+            TimeSpan searchBudget = thinkingBudget > displayDelay
+                ? thinkingBudget - displayDelay
+                : TimeSpan.FromMilliseconds(30);
+            UpdateStatus($"KI denkt... Budget ca. {Math.Max(0.1, thinkingBudget.TotalSeconds):0.0}s, Stufe {skillLevel}/10");
+            await Task.Delay(displayDelay, cancellationToken);
+            if (generation != aiGeneration || !isMatchStarted || game.IsGameOver || !IsAiSide(game.CurrentTurn))
             {
                 return;
             }
 
-            LegalMove? aiMove = chessAi.SelectMove(game, difficulty.Value, GetSelectedAiPersonality());
+            LegalMove? aiMove = await Task.Run(
+                () => chessAi.SelectMove(searchPosition, difficulty.Value, personality, skillLevel, searchBudget, cancellationToken),
+                cancellationToken);
             if (aiMove is null)
             {
                 UpdateStatus("KI hat keinen Zug");
@@ -688,10 +759,21 @@ public partial class MainWindow : Window
 
             boardView.TryPlayMove(aiMove);
         }
+        catch (OperationCanceledException)
+        {
+            if (generation == aiGeneration && isMatchStarted)
+            {
+                UpdateStatus(game.GetStatusText("KI-Berechnung abgebrochen"));
+            }
+        }
         finally
         {
-            boardView.InteractionLocked = false;
-            isAiThinking = false;
+            if (generation == aiGeneration)
+            {
+                boardView.InteractionLocked = false;
+                isAiThinking = false;
+            }
+
             boardView.Focus();
         }
     }
@@ -711,14 +793,33 @@ public partial class MainWindow : Window
             : null;
     }
 
-    private void StartNewGame()
+    private void PrepareNewGame(string message = "Spiel vorbereitet. Druecke Spiel starten.")
     {
         aiGeneration++;
+        aiSearchCancellationSource?.Cancel();
+        isAiThinking = false;
+        isMatchStarted = false;
         analysisIndex = -1;
         analysisMoves.Clear();
-        isClockPaused = false;
+        isClockPaused = true;
         ResetUiState();
         boardView.StartNewGame(GetSelectedGameVariant());
+        boardView.InteractionLocked = true;
+        NewGameButton.Content = "Spiel starten";
+        UpdateStatus(game.GetStatusText(message));
+    }
+
+    private void BeginMatch()
+    {
+        if (isMatchStarted)
+        {
+            return;
+        }
+
+        isMatchStarted = true;
+        isClockPaused = false;
+        boardView.InteractionLocked = false;
+        NewGameButton.Content = "Neues Spiel";
         UpdateStatus(game.GetStatusText(GetVariantStartMessage(game.Variant)));
         QueueAiMoveIfNeeded();
     }
@@ -726,15 +827,18 @@ public partial class MainWindow : Window
     private void ReloadGameFromModel(string message)
     {
         aiGeneration++;
+        isMatchStarted = false;
         ResetUiState();
         isLoadingSettings = true;
         SelectComboBoxItemByTag(GameVariantComboBox, game.Variant.ToString());
         isLoadingSettings = false;
         RebuildMoveUiFromHistory();
         boardView.ReloadFromGame(message);
+        boardView.InteractionLocked = true;
+        NewGameButton.Content = "Spiel starten";
         if (!isReplaying)
         {
-            QueueAiMoveIfNeeded();
+            UpdateStatus(game.GetStatusText($"{message}. Druecke Spiel starten."));
         }
     }
 
@@ -921,7 +1025,7 @@ public partial class MainWindow : Window
             MessageBoxResult.No);
         if (result == MessageBoxResult.Yes)
         {
-            StartNewGame();
+            PrepareNewGame("Neues Spiel vorbereitet. Druecke Spiel starten.");
         }
     }
 
@@ -932,15 +1036,39 @@ public partial class MainWindow : Window
             GetSelectedComboBoxTag(AiSideComboBox) == (color == PieceColor.White ? "White" : "Black");
     }
 
-    private static int GetAiDelay(AiDifficulty difficulty)
+    private TimeSpan GetAiThinkingBudget(AiDifficulty difficulty, int skillLevel)
     {
-        return difficulty switch
+        TimeSpan remaining = game.CurrentTurn == PieceColor.White ? whiteTime : blackTime;
+        double remainingSeconds = Math.Max(1, remaining.TotalSeconds);
+        double baseSeconds = difficulty switch
         {
-            AiDifficulty.Easy => 180,
-            AiDifficulty.Medium => 260,
-            AiDifficulty.Hard => 380,
-            _ => 250
+            AiDifficulty.Easy => 0.08,
+            AiDifficulty.Medium => 0.14,
+            AiDifficulty.Hard => 0.22,
+            _ => 0.12
         };
+
+        double clockModeCap = appSettings.ClockMinutes switch
+        {
+            <= 1 => 0.22,
+            <= 3 => 0.42,
+            <= 10 => 0.75,
+            <= 15 => 1.05,
+            _ => 1.35
+        };
+        double incrementBonus = Math.Min(0.45, clockIncrementSeconds * 0.08);
+        double percentageBudget = remainingSeconds * (difficulty == AiDifficulty.Hard ? 0.012 : 0.006);
+        double skillBudget = skillLevel * (difficulty == AiDifficulty.Hard ? 0.045 : 0.025);
+        double panicCap = remainingSeconds switch
+        {
+            <= 5 => 0.08,
+            <= 15 => 0.16,
+            <= 30 => 0.28,
+            _ => clockModeCap
+        };
+
+        double seconds = Math.Min(panicCap, Math.Min(clockModeCap + incrementBonus, baseSeconds + percentageBudget + skillBudget));
+        return TimeSpan.FromMilliseconds(Math.Clamp(seconds * 1000, 60, 1800));
     }
 
     private void PlayMoveSound(MoveResult move)
@@ -1034,11 +1162,7 @@ public partial class MainWindow : Window
         EvaluationText.Text = $"Bewertung: {balance:+#;-#;0}";
         EvaluationBar.Value = Math.Clamp(50 + balance * 4, 0, 100);
 
-        AiDifficulty difficulty = GetSelectedAiDifficulty() ?? AiDifficulty.Medium;
-        IReadOnlyList<string> candidates = chessAi.GetCandidateSummaries(game, difficulty, GetSelectedAiPersonality(), maxCount: 3);
-        AiCandidatesText.Text = candidates.Count == 0
-            ? "Noch keine Kandidaten."
-            : string.Join("\n", candidates);
+        AiCandidatesText.Text = "Bester Zug kann per Button im Hintergrund berechnet werden.";
 
         if (!string.IsNullOrWhiteSpace(coachMessage))
         {
@@ -1097,6 +1221,19 @@ public partial class MainWindow : Window
     {
         string tag = GetSelectedComboBoxTag(AiPersonalityComboBox) ?? AiPersonality.Balanced.ToString();
         return Enum.TryParse(tag, out AiPersonality personality) ? personality : AiPersonality.Balanced;
+    }
+
+    private int GetSelectedAiSkillLevel()
+    {
+        return (int)Math.Clamp(Math.Round(AiSkillSlider.Value), 1, 10);
+    }
+
+    private void UpdateAiSkillText()
+    {
+        if (AiSkillValueText is not null && AiSkillSlider is not null)
+        {
+            AiSkillValueText.Text = $"KI-Stufe: {GetSelectedAiSkillLevel()}/10";
+        }
     }
 
     private static string GetVariantStartMessage(GameVariant variant)
